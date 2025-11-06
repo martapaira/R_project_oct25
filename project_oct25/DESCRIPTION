@@ -1,0 +1,23 @@
+Package: ProgettoBioinfo
+Title: Funzioni R per l'Analisi di Comparazione di Data Wrangling
+Version: 1.0.0
+Authors@R: person("Marta", "Paira", email = "tua_email@example.com", role = c("aut", "cre"))
+Description: Contiene funzioni ottimizzate, basate su data.table, per eseguire
+    tutti i task di analisi richiesti dal progetto, inclusi join spaziali,
+    aggregazioni e confronti di performance.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+Imports: 
+    data.table,
+    lubridate,
+    stats,
+    scales
+Suggests: 
+    dplyr,
+    sqldf,
+    knitr,
+    rmarkdown,
+    testthat
+RoxygenNote: 7.3.3

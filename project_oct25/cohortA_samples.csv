@@ -1,0 +1,13 @@
+sample_id,condition,batch,patient_id,timepoint,cohort
+S14,treated,batch2,P053,T0,A
+S19,control,batch2,P013,T0,A
+S04,treated,batch3,P044,T0,A
+S15,treated,batch3,P002,T1,A
+S21,control,batch2,P008,T0,A
+S18,treated,batch1,P011,T0,A
+S11,treated,batch3,P022,T0,A
+S05,treated,batch3,P020,T1,A
+S03,treated,batch2,P017,T1,A
+S20,control,batch3,P017,T1,A
+S07,treated,batch1,P009,T1,A
+S08,treated,batch1,P038,T0,A

@@ -1,0 +1,141 @@
+integration_cluster,cell_type,count
+2,Pro-angiogenesis Macrophage,842
+8,Non Blood Cell,36
+1,Exhausted CD8+ T cells,437
+0,Effector/Memory CD4+ T cells,532
+1,MAIT cells,2
+3,Pro-angiogenesis Macrophage,742
+13,Lung Cancer Cell,61
+1,Effector/Memory CD8+ T cells,350
+6,Natural killer cell,428
+5,B Cell,685
+8,Lung Cancer Cell,59
+0,CD4+ T cell,476
+4,Pro-angiogenesis Macrophage,175
+4,Macrophage,335
+0,Effector/Memory CD8+ T cells,164
+1,CD8+ T cell,157
+2,Macrophage,111
+0,Natural killer cell,8
+1,CD4 or CD8 T cell,78
+0,Blood Cell,120
+7,Pro-angiogenesis Macrophage,112
+7,Pro-inflammatory Macrophage,59
+7,Macrophage,130
+0,T regulatory cells,182
+1,Effector/Memory CD4+ T cells,134
+14,Mast cell,41
+2,Phagocytosis Macrophage,182
+0,T or NK Cell,8
+0,CD8+ T cell,53
+8,CAFadi,8
+0,Pro-angiogenesis Macrophage,6
+12,Endothelial Cells,83
+4,CD4 or CD8 T cell,6
+8,Pancreatic Cancer Cell,69
+9,Exhausted CD8+ T cells,65
+4,Phagocytosis Macrophage,93
+1,CD8 T or NK cell,27
+10,CAFinfla,54
+0,Tfh/Th1 helper CD4+ T cells,70
+8,Normal Fibroblast,31
+10,CAFadi,19
+4,Blood Cell,73
+8,Any Cell,21
+3,Phagocytosis Macrophage,13
+11,cDC2,34
+5,Pro-angiogenesis Macrophage,10
+0,CD4 or CD8 T cell,77
+9,CD4 or CD8 T cell,7
+8,Cancer Associated Fibroblasts,15
+8,Macrophage,4
+1,T or NK Cell,4
+3,Macrophage,41
+9,Pro-angiogenesis Macrophage,32
+1,CD4+ T cell,12
+9,T regulatory cells,9
+8,CAFinfla,16
+7,Phagocytosis Macrophage,1
+9,Macrophage,12
+5,Blood Cell,33
+0,Naive CD4+ T cells,51
+11,cDC1,14
+8,Normal Tissue Cell,6
+1,Natural killer cell,27
+8,CAFmyo,4
+4,CD4+ T cell,16
+10,CAFmyo,44
+6,Effector/Memory CD8+ T cells,16
+7,Macrophage or Dendritic Cell,8
+9,Macrophage or Dendritic Cell,1
+4,Any Cell,10
+8,Non Stromal Cell,10
+11,Pro-angiogenesis Macrophage,6
+4,Naive CD4+ T cells,26
+1,Tfh/Th1 helper CD4+ T cells,22
+6,Exhausted CD8+ T cells,8
+0,B Cell,2
+5,pDC,3
+9,Natural killer cell,5
+4,Natural killer cell,3
+11,LAMP3 cDC,18
+4,B Cell,13
+8,Endothelial Cells,12
+4,Effector/Memory CD8+ T cells,6
+0,CD8 T or NK cell,7
+2,Macrophage or Dendritic Cell,2
+13,Non Stromal Cell,3
+11,Macrophage or Dendritic Cell,6
+9,Effector/Memory CD8+ T cells,6
+15,pDC,37
+9,CD4+ T cell,3
+8,Tfh/Th1 helper CD4+ T cells,2
+4,Macrophage or Dendritic Cell,1
+9,Effector/Memory CD4+ T cells,1
+11,Macrophage,5
+0,Endothelial Cells,1
+9,CD8+ T cell,16
+14,Blood Cell,2
+0,Macrophage,1
+8,Stromal Cell,8
+9,cDC1,3
+9,Blood Cell,3
+9,Phagocytosis Macrophage,5
+10,Stromal Cell,2
+9,B Cell,4
+10,Normal Fibroblast,2
+5,Exhausted CD8+ T cells,1
+1,T regulatory cells,1
+9,Tfh/Th1 helper CD4+ T cells,5
+9,cDC2,2
+1,Blood Cell,2
+14,Tfh/Th1 helper CD4+ T cells,1
+5,Macrophage,3
+0,Exhausted CD8+ T cells,6
+6,CD8 T or NK cell,5
+5,Effector/Memory CD4+ T cells,1
+6,CD8+ T cell,2
+4,Non Blood Cell,1
+1,pDC,1
+9,Any Cell,1
+4,Exhausted CD8+ T cells,1
+8,Pro-angiogenesis Macrophage,3
+6,Pro-angiogenesis Macrophage,1
+5,Effector/Memory CD8+ T cells,1
+5,CD8+ T cell,1
+0,Macrophage or Dendritic Cell,1
+13,Pancreatic Cancer Cell,1
+13,Non Blood Cell,2
+10,Cancer Associated Fibroblasts,1
+13,CAFadi,1
+5,Macrophage or Dendritic Cell,1
+5,CD4+ T cell,1
+11,Phagocytosis Macrophage,2
+0,Lung Cancer Cell,2
+9,CD8 T or NK cell,1
+9,B cell or Plasmablast,1
+0,Naive CD8+ T cells,1
+11,Dendritic Cell,1
+4,Effector/Memory CD4+ T cells,1
+8,Phagocytosis Macrophage,1
+8,Blood Cell,1

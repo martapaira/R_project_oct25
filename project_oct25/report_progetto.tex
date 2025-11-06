@@ -1,0 +1,1908 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={report\_progetto},
+  pdfauthor={Marta Paira},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{report\_progetto}
+\author{Marta Paira}
+\date{2025-11-04}
+
+\begin{document}
+\maketitle
+
+toc: true toc\_float: true theme: united code\_folding: `hide'
+
+Setup Globale e Caricamento Dati
+
+In questo primo blocco, carichiamo tutte le librerie necessarie,
+definiamo le funzioni helper e carichiamo tutti i file CSV in memoria
+una sola volta.
+
+\section{1. Opzioni Globali}\label{opzioni-globali}
+
+knitr::opts\_chunk\$set(echo = TRUE, message = FALSE, \# Nasconde i
+messaggi di caricamento warning = FALSE, \# Nasconde gli avvertimenti
+fig.align = `center')
+
+\section{2. Caricamento Librerie}\label{caricamento-librerie}
+
+\begin{verbatim}
+library(data.table)
+library(dplyr)
+library(lubridate)
+library(sqldf)
+library(tidyr) 
+\end{verbatim}
+
+\section{--- 1. Funzioni Helper ---}\label{funzioni-helper}
+
+\section{Funzione robusta per estrarre il tempo (in
+secondi)}\label{funzione-robusta-per-estrarre-il-tempo-in-secondi}
+
+extract\_time \textless- function(time\_obj) \{
+return(round(time\_obj{[}``elapsed''{]}, 6)) \}
+
+\section{Funzione per calcolare la lunghezza di overlap (Task 10 \&
+11)}\label{funzione-per-calcolare-la-lunghezza-di-overlap-task-10-11}
+
+calc\_overlap\_length \textless- function(start1, end1, start2, end2) \{
+pmax(0, pmin(end1, end2) - pmax(start1, start2)) \}
+
+\section{--- 2. Caricamento Dati (data.table)
+---}\label{caricamento-dati-data.table}
+
+cat(``Caricamento di tutti i 13 file di dati\ldots{}\n'') dt\_counts
+\textless- fread(``bulk\_counts\_long.csv'') dt\_metadata \textless-
+fread(``sample\_metadata.csv'') dt\_labs\_t5 \textless-
+fread(``clinical\_labs.csv'') dt\_ranges\_t5 \textless-
+fread(``lab\_reference\_ranges.csv'') dt\_vitals\_t6 \textless-
+fread(``vitals\_time\_series.csv'') dt\_peaks\_t7 \textless-
+fread(``atac\_peaks.bed.csv'') dt\_genes\_t10 \textless-
+fread(``gene\_annotation.bed.csv'') dt\_variants\_t11 \textless-
+fread(``variants.csv'') dt\_counts\_wide\_t9 \textless-
+fread(``bulk\_counts\_wide.csv'') dt\_cohortA \textless-
+fread(``cohortA\_samples.csv'') dt\_cohortB \textless-
+fread(``cohortB\_samples.csv'') dt\_clusters\_fr \textless-
+fread(``annotated\_GSM3516673\_normal\_annotated\_GSM3516672\_tumor\_SeuratIntegration.csv'')
+dt\_celltypes\_fr \textless-
+fread(``nt\_combined\_clustering.output.csv'') cat(``Dati caricati.\n'')
+
+\section{--- 3. Creazione Copie (data.frame)
+---}\label{creazione-copie-data.frame}
+
+df\_counts \textless- as.data.frame(dt\_counts) df\_metadata \textless-
+as.data.frame(dt\_metadata) df\_labs\_t5 \textless-
+as.data.frame(dt\_labs\_t5) df\_ranges\_t5 \textless-
+as.data.frame(dt\_ranges\_t5) df\_vitals\_t6 \textless-
+as.data.frame(dt\_vitals\_t6) df\_peaks\_t7 \textless-
+as.data.frame(dt\_peaks\_t7) df\_genes\_t10 \textless-
+as.data.frame(dt\_genes\_t10) df\_variants\_t11 \textless-
+as.data.frame(dt\_variants\_t11) df\_counts\_wide\_t9 \textless-
+as.data.frame(dt\_counts\_wide\_t9) df\_cohortA \textless-
+as.data.frame(dt\_cohortA) df\_cohortB \textless-
+as.data.frame(dt\_cohortB) df\_clusters\_fr \textless-
+as.data.frame(dt\_clusters\_fr) df\_celltypes\_fr \textless-
+as.data.frame(dt\_celltypes\_fr) cat(``Copie data.frame create.\n'')
+
+\section{--- 4. Inizializzazione Tabella Performance Cumulativa
+---}\label{inizializzazione-tabella-performance-cumulativa}
+
+\section{Definiamo la tabella principale con TUTTE le colonne
+possibili}\label{definiamo-la-tabella-principale-con-tutte-le-colonne-possibili}
+
+performance\_comparison \textless- data.table( Task = character(),
+\texttt{Time\_DataFrame\ (s)} = numeric(), \texttt{Time\_DataTable\ (s)}
+= numeric(), \texttt{Time\_SQL\ (s)} = numeric(),
+\texttt{Time\_BaseR\ (s)} = numeric(), \texttt{Time\_DT\_NoIndex\ (s)} =
+numeric(), \texttt{Time\_DT\_Keyed/Index\ (s)} = numeric(),
+\texttt{Time\_DT\_Rolling\ (s)} = numeric() )
+
+Task 1: Filtro e Sommario
+
+Goal: Filtrare per condition == "treated" e geni che iniziano con
+"GENE\_00", poi calcolare media e mediana.
+
+cat(``\n--- INIZIO TASK 1: COMPARAZIONE PERFORMANCE ---\n'')
+
+\section{--- PREPARAZIONE DATI PER TASK 1.1 e 1.2
+---}\label{preparazione-dati-per-task-1.1-e-1.2}
+
+df\_unita \textless- df\_counts \%\textgreater\%
+left\_join(df\_metadata, by = ``sample\_id'') dt\_unita \textless-
+dt\_counts{[}dt\_metadata, on = ``sample\_id''{]}
+
+\section{----------------------------------------------------}\label{section}
+
+\section{TASK 1.1: Filtro e Sommario
+(mean/median)}\label{task-1.1-filtro-e-sommario-meanmedian}
+
+\section{----------------------------------------------------}\label{section-1}
+
+cat(``\nRunning Task 1.1: Filter \& Summarize\ldots{}\n'')
+
+\section{1.1.1: Data.frame / Dplyr}\label{data.frame-dplyr}
+
+time\_df\_1\_1\_result \textless- system.time(\{ df\_risultato\_1\_1
+\textless- df\_unita \%\textgreater\% filter(grepl(``\^{}GENE\_00'',
+gene) \& condition == ``treated'') \%\textgreater\% group\_by(gene)
+\%\textgreater\% summarise(media\_counts = mean(count), median\_counts =
+median(count), .groups = `drop') \}) time\_df\_1\_1 \textless-
+extract\_time(time\_df\_1\_1\_result) cat(``DataFrame T1.1 Time:'',
+time\_df\_1\_1, ``seconds.\n'')
+
+\section{1.1.2: Data.table}\label{data.table}
+
+time\_dt\_1\_1\_result \textless- system.time(\{ dt\_risultato\_1\_1
+\textless- dt\_unita{[} grepl(``\^{}GENE\_00'', gene) \& condition ==
+``treated'', list(media\_counts = mean(count), median\_counts =
+median(count)), by = gene {]} \}) time\_dt\_1\_1 \textless-
+extract\_time(time\_dt\_1\_1\_result) cat(``data.table T1.1 Time:'',
+time\_dt\_1\_1, ``seconds.\n'')
+
+\section{1.1.3: SQL (sqldf)}\label{sql-sqldf}
+
+time\_sql\_1\_1\_result \textless- system.time(\{ sql\_risultato\_1\_1
+\textless- sqldf::sqldf('' SELECT T1.gene, AVG(T1.count) AS
+media\_counts, MEDIAN(T1.count) AS median\_counts FROM df\_counts AS
+T1\\
+LEFT JOIN df\_metadata AS T2 ON T1.sample\_id = T2.sample\_id\\
+WHERE T2.condition = `treated' AND T1.gene LIKE `GENE\_00\%' GROUP BY
+T1.gene ``) \}) time\_sql\_1\_1 \textless-
+extract\_time(time\_sql\_1\_1\_result) cat(''SQL T1.1 Time:``,
+time\_sql\_1\_1,''seconds.\n``)
+
+\section{Aggiornamento tabella comparativa dopo Task
+1.1}\label{aggiornamento-tabella-comparativa-dopo-task-1.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T1.1 Filter \& Summarize'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_1\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_1\_1, \texttt{Time\_SQL\ (s)}
+= time\_sql\_1\_1) ), use.names = TRUE, fill = TRUE )
+print(head(df\_risultato\_1\_1, 5))
+
+\section{----------------------------------------------------}\label{section-2}
+
+\section{TASK 1.2: Join metadati e sommario per
+condizione}\label{task-1.2-join-metadati-e-sommario-per-condizione}
+
+\section{----------------------------------------------------}\label{section-3}
+
+cat(``\nRunning Task 1.2: Join \& Summarize\ldots{}\n'')
+
+\section{1.2.1: Data.frame / Dplyr}\label{data.frame-dplyr-1}
+
+time\_df\_1\_2\_result \textless- system.time(\{ df\_risultato\_1\_2
+\textless- df\_counts \%\textgreater\% left\_join(df\_metadata, by =
+``sample\_id'') \%\textgreater\% group\_by(gene, condition)
+\%\textgreater\% summarise(media\_counts = mean(count), .groups =
+`drop') \}) time\_df\_1\_2 \textless-
+extract\_time(time\_df\_1\_2\_result) cat(``DataFrame T1.2 Time:'',
+time\_df\_1\_2, ``seconds.\n'')
+
+\section{1.2.2: Data.table}\label{data.table-1}
+
+time\_dt\_1\_2\_result \textless- system.time(\{ dt\_risultato\_1\_2
+\textless- dt\_counts{[}dt\_metadata, on = ``sample\_id''{]}{[},
+list(media\_counts = mean(count)), by = list(gene, condition) {]} \})
+time\_dt\_1\_2 \textless- extract\_time(time\_dt\_1\_2\_result)
+cat(``data.table T1.2 Time:'', time\_dt\_1\_2, ``seconds.\n'')
+
+\section{1.2.3: SQL (sqldf)}\label{sql-sqldf-1}
+
+time\_sql\_1\_2\_result \textless- system.time(\{ sql\_risultato\_1\_2
+\textless- sqldf::sqldf('' SELECT T1.gene, T2.condition, AVG(T1.count)
+AS media\_counts FROM df\_counts AS T1 LEFT JOIN df\_metadata AS T2 ON
+T1.sample\_id = T2.sample\_id GROUP BY T1.gene, T2.condition ``) \})
+time\_sql\_1\_2 \textless- extract\_time(time\_sql\_1\_2\_result)
+cat(''SQL T1.2 Time:``, time\_sql\_1\_2,''seconds.\n``)
+
+\section{Aggiornamento tabella comparativa dopo Task
+1.2}\label{aggiornamento-tabella-comparativa-dopo-task-1.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T1.2 Join \& Summarize'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_1\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_1\_2, \texttt{Time\_SQL\ (s)}
+= time\_sql\_1\_2) ), use.names = TRUE, fill = TRUE )
+print(head(df\_risultato\_1\_2, 5))
+
+\section{----------------------------------------------------}\label{section-4}
+
+\section{SALVATAGGIO RISULTATI TASK
+1}\label{salvataggio-risultati-task-1}
+
+\section{----------------------------------------------------}\label{section-5}
+
+fwrite(dt\_risultato\_1\_1, ``Task1\_FilterSummarize\_Results.csv'')
+fwrite(dt\_risultato\_1\_2, ``Task1\_JoinSummarize\_Results.csv'')
+
+cat(``\nAnalisi Task 1 completata.\n'')
+
+Task 2: Colonne Derivate (QC)
+
+Goal: Aggiungere log2\_counts e sovrascrivere il flag `high' per soglia
+gene-wise.
+
+cat(``\n--- INIZIO TASK 2: COLONNE DERIVATE QC ---\n'')
+
+\section{Creiamo copie pulite dei
+dati}\label{creiamo-copie-pulite-dei-dati}
+
+dt\_counts\_t2 \textless- copy(dt\_counts) df\_counts\_t2 \textless-
+copy(df\_counts) df\_counts\_t2\_baseR \textless- copy(df\_counts) \#
+Copia per Base R
+
+\section{----------------------------------------------------}\label{section-6}
+
+\section{TASK 2.1: Aggiungere log2 e flag fisso (count \textgreater{}
+100)}\label{task-2.1-aggiungere-log2-e-flag-fisso-count-100}
+
+\section{----------------------------------------------------}\label{section-7}
+
+cat(``\nRunning Task 2.1: Log2 \& Fixed Flag (3-way
+comparison)\ldots{}\n'')
+
+\section{--- 2.1.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-2}
+
+time\_df\_2\_1\_result \textless- system.time(\{ df\_counts\_t2\_result
+\textless- df\_counts\_t2 \%\textgreater\% mutate(log2\_counts =
+log2(count + 1), high = ifelse(count \textgreater{} 100, 1, 0)) \})
+time\_df\_2\_1 \textless- extract\_time(time\_df\_2\_1\_result)
+cat(``DataFrame T2.1 Time:'', time\_df\_2\_1, ``seconds.\n'')
+
+\section{--- 2.1.2: Data.table (Operazione In-Place :=)
+---}\label{data.table-operazione-in-place}
+
+time\_dt\_2\_1\_result \textless- system.time(\{ dt\_counts\_t2{[},
+log2\_counts := log2(count + 1){]} dt\_counts\_t2{[}, high :=
+ifelse(count \textgreater{} 100, 1, 0){]} \}) time\_dt\_2\_1 \textless-
+extract\_time(time\_dt\_2\_1\_result) cat(``data.table T2.1 Time:'',
+time\_dt\_2\_1, ``seconds.\n'')
+
+\section{--- 2.1.3: Base R (Terzo Metodo)
+---}\label{base-r-terzo-metodo}
+
+time\_baseR\_2\_1\_result \textless- system.time(\{
+df\_counts\_t2\_baseR\(log2_counts <- log2(df_counts_t2_baseR\)count +
+1) df\_counts\_t2\_baseR\(high <- ifelse(df_counts_t2_baseR\)count
+\textgreater{} 100, 1, 0) \}) time\_baseR\_2\_1 \textless-
+extract\_time(time\_baseR\_2\_1\_result) cat(``Base R T2.1 Time:'',
+time\_baseR\_2\_1, ``seconds.\n'')
+
+\section{Aggiorna tabella di performance Task
+2.1}\label{aggiorna-tabella-di-performance-task-2.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T2.1 Log2 \& Fixed Flag'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_2\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_2\_1,
+\texttt{Time\_BaseR\ (s)} = time\_baseR\_2\_1) ), use.names = TRUE, fill
+= TRUE ) print(head(dt\_counts\_t2, 5))
+
+\section{----------------------------------------------------}\label{section-8}
+
+\section{TASK 2.2: Sovrascrivere la Soglia per
+Gene}\label{task-2.2-sovrascrivere-la-soglia-per-gene}
+
+\section{----------------------------------------------------}\label{section-9}
+
+cat(``\nRunning Task 2.2: Overwrite Flag by Gene (3-way
+comparison)\ldots{}\n'')
+
+\section{--- 2.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-3}
+
+time\_df\_2\_2\_result \textless- system.time(\{ df\_risultato\_2\_2
+\textless- df\_counts\_t2 \%\textgreater\% group\_by(gene)
+\%\textgreater\% mutate(high = ifelse(count \textgreater{}
+median(count), 1, 0)) \%\textgreater\% ungroup() \}) time\_df\_2\_2
+\textless- extract\_time(time\_df\_2\_2\_result) cat(``DataFrame T2.2
+Time:'', time\_df\_2\_2, ``seconds.\n'')
+
+\section{--- 2.2.2: Data.table (Il vero vantaggio di := e by)
+---}\label{data.table-il-vero-vantaggio-di-e-by}
+
+time\_dt\_2\_2\_result \textless- system.time(\{ dt\_counts\_t2{[}, high
+:= ifelse(count \textgreater{} median(count), 1, 0), by = gene{]} \})
+time\_dt\_2\_2 \textless- extract\_time(time\_dt\_2\_2\_result)
+cat(``data.table T2.2 Time:'', time\_dt\_2\_2, ``seconds.\n'')
+
+\section{--- 2.2.3: Base R (Terzo Metodo)
+---}\label{base-r-terzo-metodo-1}
+
+time\_baseR\_2\_2\_result \textless- system.time(\{
+df\_counts\_t2\_baseR\(median_gene <- ave(df_counts_t2_baseR\)count,
+df\_counts\_t2\_baseR\(gene, FUN = median)
+  df_counts_t2_baseR\)high \textless-
+ifelse(df\_counts\_t2\_baseR\(count > df_counts_t2_baseR\)median\_gene,
+1, 0) \}) time\_baseR\_2\_2 \textless-
+extract\_time(time\_baseR\_2\_2\_result) cat(``Base R T2.2 Time:'',
+time\_baseR\_2\_2, ``seconds.\n'')
+
+\section{Aggiorna tabella di performance Task
+2.2}\label{aggiorna-tabella-di-performance-task-2.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T2.2 Overwrite Flag by Gene'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_2\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_2\_2,
+\texttt{Time\_BaseR\ (s)} = time\_baseR\_2\_2) ), use.names = TRUE, fill
+= TRUE )
+
+\section{Salviamo il risultato
+finale}\label{salviamo-il-risultato-finale}
+
+dt\_risultato\_2 \textless- dt\_counts\_t2 print(head(dt\_risultato\_2,
+5))
+
+\section{----------------------------------------------------}\label{section-10}
+
+\section{SALVATAGGIO RISULTATI TASK
+2}\label{salvataggio-risultati-task-2}
+
+\section{----------------------------------------------------}\label{section-11}
+
+fwrite(dt\_risultato\_2, ``Task2\_DerivedColumns\_Results.csv'')
+cat(``\nAnalisi Task 2 completata.\n'')
+
+Task 3: Velocizzare Joins/Lookups
+
+Goal: Dimostrare l'efficienza di setkey per i join e setindex per i
+filtri.
+
+cat(``\n--- INIZIO TASK 3: VELOCIZZARE JOINS/LOOKUPS ---\n'')
+
+\section{Re-carichiamo i dati puliti}\label{re-carichiamo-i-dati-puliti}
+
+dt\_counts\_t3 \textless- copy(dt\_counts) dt\_metadata\_t3 \textless-
+copy(dt\_metadata) df\_counts\_t3 \textless- copy(df\_counts)
+df\_metadata\_t3 \textless- copy(df\_metadata)
+
+\section{----------------------------------------------------}\label{section-12}
+
+\section{TASK 3.1: Equi-Join con
+setkey()}\label{task-3.1-equi-join-con-setkey}
+
+\section{----------------------------------------------------}\label{section-13}
+
+cat(``\nRunning Task 3.1: Equi-Join Comparison\ldots{}\n'')
+
+\section{--- 3.1.1: Data.frame / Dplyr (Join Standard)
+---}\label{data.frame-dplyr-join-standard}
+
+time\_df\_3\_1\_result \textless- system.time(\{ df\_risultato\_3\_1
+\textless- df\_counts\_t3 \%\textgreater\% left\_join(df\_metadata\_t3,
+by = ``sample\_id'') \}) time\_df\_3\_1 \textless-
+extract\_time(time\_df\_3\_1\_result) cat(``DataFrame T3.1 Time:'',
+time\_df\_3\_1, ``seconds.\n'')
+
+\section{--- 3.1.2: Data.table (Join con setkey())
+---}\label{data.table-join-con-setkey}
+
+setkey(dt\_metadata\_t3, sample\_id) \# Imposta la chiave
+time\_dt\_key\_3\_1\_result \textless- system.time(\{
+dt\_risultato\_3\_1\_key \textless- dt\_counts\_t3{[}dt\_metadata\_t3,
+on = ``sample\_id''{]} \}) time\_dt\_key\_3\_1 \textless-
+extract\_time(time\_dt\_key\_3\_1\_result) cat(``data.table T3.1 (Keyed)
+Time:'', time\_dt\_key\_3\_1, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+3.1}\label{aggiornamento-tabella-di-performance-task-3.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T3.1 Equi-Join (Keyed)'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_3\_1,
+\texttt{Time\_DT\_Keyed/Index\ (s)} = time\_dt\_key\_3\_1) ), use.names
+= TRUE, fill = TRUE ) print(head(dt\_risultato\_3\_1\_key, 5))
+
+\section{----------------------------------------------------}\label{section-14}
+
+\section{TASK 3.2: Indice Secondario e Subset
+(Lookups)}\label{task-3.2-indice-secondario-e-subset-lookups}
+
+\section{----------------------------------------------------}\label{section-15}
+
+cat(``\nRunning Task 3.2: Secondary Index and Lookup\ldots{}\n'')
+
+\section{Target per il lookup}\label{target-per-il-lookup}
+
+gene\_subset \textless- dt\_counts\_t3{[}1:10, gene{]} sample\_target
+\textless- ``S01'' \# Usiamo un sample\_id valido
+
+\section{Misuriamo il lookup SENZA
+INDICE}\label{misuriamo-il-lookup-senza-indice}
+
+time\_no\_index\_3\_2\_result \textless- system.time(\{
+dt\_lookup\_no\_index \textless- dt\_counts\_t3{[}gene \%in\%
+gene\_subset \& sample\_id == sample\_target{]} \}) time\_dt\_no\_index
+\textless- extract\_time(time\_no\_index\_3\_2\_result) cat(``data.table
+T3.2 (No Index) Time:'', time\_dt\_no\_index, ``seconds.\n'')
+
+\section{Aggiungiamo l'indice
+secondario}\label{aggiungiamo-lindice-secondario}
+
+setindex(dt\_counts\_t3, gene, sample\_id)
+
+\section{Misuriamo il lookup CON
+INDICE}\label{misuriamo-il-lookup-con-indice}
+
+time\_with\_index\_3\_2\_result \textless- system.time(\{
+dt\_lookup\_with\_index \textless- dt\_counts\_t3{[}gene \%in\%
+gene\_subset \& sample\_id == sample\_target{]} \})
+time\_dt\_with\_index \textless-
+extract\_time(time\_with\_index\_3\_2\_result) cat(``data.table T3.2
+(With Index) Time:'', time\_dt\_with\_index, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+3.2}\label{aggiornamento-tabella-di-performance-task-3.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T3.2 Lookup (Index vs
+No-Index)'', \texttt{Time\_DT\_NoIndex\ (s)} = time\_dt\_no\_index,
+\texttt{Time\_DT\_Keyed/Index\ (s)} = time\_dt\_with\_index) ),
+use.names = TRUE, fill = TRUE ) print(head(dt\_lookup\_with\_index, 5))
+
+\section{----------------------------------------------------}\label{section-16}
+
+\section{SALVATAGGIO RISULTATI TASK
+3}\label{salvataggio-risultati-task-3}
+
+\section{----------------------------------------------------}\label{section-17}
+
+fwrite(dt\_risultato\_3\_1\_key, ``Task3\_JoinResults\_Complete.csv'')
+cat(``\nAnalisi Task 3 completata.\n'')
+
+Task 4: Annotazione e Top Geni
+
+Goal: Calcolare i conteggi totali per paziente (T4.1) e trovare i Top 10
+geni per condition (T4.2).
+
+cat(``\n--- INIZIO TASK 4: ANNOTAZIONE E TOP GENI ---\n'')
+
+\section{Re-carichiamo i dati per un benchmark
+pulito}\label{re-carichiamo-i-dati-per-un-benchmark-pulito}
+
+dt\_counts\_t4 \textless- copy(dt\_counts) dt\_metadata\_t4 \textless-
+copy(dt\_metadata) df\_counts\_t4 \textless- copy(df\_counts)
+df\_metadata\_t4 \textless- copy(df\_metadata)
+
+\section{----------------------------------------------------}\label{section-18}
+
+\section{TASK 4.1: Join e Conteggi Totali Per
+Paziente}\label{task-4.1-join-e-conteggi-totali-per-paziente}
+
+\section{----------------------------------------------------}\label{section-19}
+
+cat(``\nRunning Task 4.1: Total Counts per Patient (3-way
+comparison)\ldots{}\n'')
+
+\section{--- 4.1.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-4}
+
+time\_df\_4\_1\_result \textless- system.time(\{ df\_risultato\_4\_1
+\textless- df\_counts\_t4 \%\textgreater\% left\_join(df\_metadata\_t4,
+by = ``sample\_id'') \%\textgreater\% group\_by(patient\_id)
+\%\textgreater\% summarise(total\_counts = sum(count), .groups = `drop')
+\}) time\_df\_4\_1 \textless- extract\_time(time\_df\_4\_1\_result)
+cat(``DataFrame T4.1 Time:'', time\_df\_4\_1, ``seconds.\n'')
+
+\section{--- 4.1.2: Data.table ---}\label{data.table-2}
+
+time\_dt\_4\_1\_result \textless- system.time(\{ dt\_risultato\_4\_1
+\textless- dt\_counts\_t4{[}dt\_metadata\_t4, on = ``sample\_id''{]}{[},
+list(total\_counts = sum(count)), by = patient\_id {]} \})
+time\_dt\_4\_1 \textless- extract\_time(time\_dt\_4\_1\_result)
+cat(``data.table T4.1 Time:'', time\_dt\_4\_1, ``seconds.\n'')
+
+\section{--- 4.1.3: SQL (sqldf) ---}\label{sql-sqldf-2}
+
+time\_sql\_4\_1\_result \textless- system.time(\{ sql\_risultato\_4\_1
+\textless- sqldf::sqldf('' SELECT T2.patient\_id, SUM(T1.count) AS
+total\_counts FROM df\_counts\_t4 AS T1 LEFT JOIN df\_metadata\_t4 AS T2
+ON T1.sample\_id = T2.sample\_id GROUP BY T2.patient\_id ``) \})
+time\_sql\_4\_1 \textless- extract\_time(time\_sql\_4\_1\_result)
+cat(''SQL T4.1 Time:``, time\_sql\_4\_1,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance Task
+4.1}\label{aggiornamento-tabella-di-performance-task-4.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T4.1 Total Counts per Patient'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_4\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_4\_1, \texttt{Time\_SQL\ (s)}
+= time\_sql\_4\_1) ), use.names = TRUE, fill = TRUE )
+print(head(df\_risultato\_4\_1, 5))
+
+\section{----------------------------------------------------}\label{section-20}
+
+\section{TASK 4.2: Trovare i Top 10 Geni per Media di Conteggio per
+Condizione}\label{task-4.2-trovare-i-top-10-geni-per-media-di-conteggio-per-condizione}
+
+\section{----------------------------------------------------}\label{section-21}
+
+cat(``\nRunning Task 4.2: Top 10 Genes by Condition\ldots{}\n'')
+
+\section{--- 4.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-5}
+
+time\_df\_4\_2\_result \textless- system.time(\{ df\_risultato\_4\_2
+\textless- df\_counts\_t4 \%\textgreater\% left\_join(df\_metadata\_t4,
+by = ``sample\_id'') \%\textgreater\% group\_by(gene, condition)
+\%\textgreater\% summarise(mean\_count = mean(count), .groups =
+`drop\_last') \%\textgreater\% arrange(condition, desc(mean\_count))
+\%\textgreater\% slice\_head(n = 10) \%\textgreater\% ungroup() \})
+time\_df\_4\_2 \textless- extract\_time(time\_df\_4\_2\_result)
+cat(``DataFrame T4.2 Time:'', time\_df\_4\_2, ``seconds.\n'')
+
+\section{--- 4.2.2: Data.table ---}\label{data.table-3}
+
+time\_dt\_4\_2\_result \textless- system.time(\{ dt\_ranked \textless-
+dt\_counts\_t4{[}dt\_metadata\_t4, on = ``sample\_id''{]}{[},
+list(mean\_count = mean(count)), by = list(gene, condition) {]}
+dt\_risultato\_4\_2 \textless- dt\_ranked{[} , rank :=
+rank(-mean\_count, ties.method = ``min''), by = condition {]}{[} rank
+\textless= 10 {]} \}) time\_dt\_4\_2 \textless-
+extract\_time(time\_dt\_4\_2\_result) cat(``data.table T4.2 Time:'',
+time\_dt\_4\_2, ``seconds.\n'')
+
+\section{--- 4.2.3: SQL (sqldf) ---}\label{sql-sqldf-3}
+
+time\_sql\_4\_2\_result \textless- system.time(\{ sql\_risultato\_4\_2
+\textless- sqldf::sqldf('' WITH RankedGenes AS ( SELECT T1.gene,
+T2.condition, AVG(T1.count) AS mean\_count, RANK() OVER (PARTITION BY
+T2.condition ORDER BY AVG(T1.count) DESC) as rn FROM df\_counts\_t4 AS
+T1 LEFT JOIN df\_metadata\_t4 AS T2 ON T1.sample\_id = T2.sample\_id
+GROUP BY T1.gene, T2.condition ) SELECT gene, condition, mean\_count
+FROM RankedGenes WHERE rn \textless= 10; ``) \}) time\_sql\_4\_2
+\textless- extract\_time(time\_sql\_4\_2\_result) cat(''SQL T4.2
+Time:``, time\_sql\_4\_2,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance Task
+4.2}\label{aggiornamento-tabella-di-performance-task-4.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T4.2 Top 10 Genes by Condition'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_4\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_4\_2, \texttt{Time\_SQL\ (s)}
+= time\_sql\_4\_2) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_risultato\_4\_2, 10)) \# Stampiamo i primi 10
+
+\section{----------------------------------------------------}\label{section-22}
+
+\section{SALVATAGGIO RISULTATI TASK
+4}\label{salvataggio-risultati-task-4}
+
+\section{----------------------------------------------------}\label{section-23}
+
+fwrite(dt\_risultato\_4\_2,
+``Task4\_Top10GenesByCondition\_Results.csv'') cat(``\nAnalisi Task 4
+completata.\n'')
+
+Task 5: Join Non-Equi (Valori di Riferimento)
+
+Goal: Etichettare gli esami come ``Normal'' o ``Out\_of\_Range'' e
+contare i tassi di anormalità.
+
+cat(``\n--- INIZIO TASK 5: NON-EQUI JOIN CLINICO ---\n'')
+
+\section{Dati per Task 5}\label{dati-per-task-5}
+
+dt\_labs\_t5\_local \textless- copy(dt\_labs\_t5) dt\_ranges\_t5\_local
+\textless- copy(dt\_ranges\_t5)
+
+\section{Pulizia Nomi Colonne}\label{pulizia-nomi-colonne}
+
+setnames(dt\_labs\_t5\_local, old = ``lab'', new = ``lab\_name'',
+skip\_absent = TRUE) setnames(dt\_ranges\_t5\_local, old = ``lab'', new
+= ``lab\_name'', skip\_absent = TRUE)
+
+df\_labs\_t5\_local \textless- as.data.frame(dt\_labs\_t5\_local)
+df\_ranges\_t5\_local \textless- as.data.frame(dt\_ranges\_t5\_local)
+
+\section{----------------------------------------------------}\label{section-24}
+
+\section{TASK 5.1: Non-Equi Join e
+Etichettatura}\label{task-5.1-non-equi-join-e-etichettatura}
+
+\section{----------------------------------------------------}\label{section-25}
+
+cat(``\nRunning Task 5.1: Non-Equi Join and Labeling\ldots{}\n'')
+
+\section{--- 5.1.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-6}
+
+time\_df\_5\_1\_result \textless- system.time(\{ df\_joined\_t5
+\textless- df\_labs\_t5\_local \%\textgreater\%
+left\_join(df\_ranges\_t5\_local, by = ``lab\_name'', relationship =
+``many-to-many'') \%\textgreater\% mutate(is\_normal = (value
+\textgreater= lower \& value \textless= upper), status =
+ifelse(is.na(lower), ``No\_Reference'', ifelse(is\_normal, ``Normal'',
+``Out\_of\_Range''))) \%\textgreater\% select(patient\_id, lab\_name,
+value, status) \}) time\_df\_5\_1 \textless-
+extract\_time(time\_df\_5\_1\_result) cat(``DataFrame T5.1 Time:'',
+time\_df\_5\_1, ``seconds.\n'')
+
+\section{--- 5.1.2: Data.table (Non-Equi Join)
+---}\label{data.table-non-equi-join}
+
+time\_dt\_5\_1\_result \textless- system.time(\{
+setkey(dt\_labs\_t5\_local, lab\_name) setkey(dt\_ranges\_t5\_local,
+lab\_name)
+
+\# Questo è il non-equi join richiesto, trova solo i ``Normal''
+dt\_risultato\_5\_1 \textless-
+dt\_labs\_t5\_local{[}dt\_ranges\_t5\_local, on = .(lab\_name, value
+\textgreater= lower, value \textless= upper), nomatch = 0 {]}{[},
+.(patient\_id, lab\_name, value, status = ``Normal'') {]} \})
+time\_dt\_5\_1 \textless- extract\_time(time\_dt\_5\_1\_result)
+cat(``data.table T5.1 Time (Non-Equi Join):'', time\_dt\_5\_1,
+``seconds.\n'')
+
+\section{--- 5.1.3: SQL (sqldf) ---}\label{sql-sqldf-4}
+
+time\_sql\_5\_1\_result \textless- system.time(\{ sql\_risultato\_5\_1
+\textless- sqldf::sqldf('' SELECT T1.patient\_id, T1.lab\_name,
+T1.value, CASE WHEN T2.lower IS NULL THEN `No\_Reference' WHEN T1.value
+\textgreater= T2.lower AND T1.value \textless= T2.upper THEN `Normal'
+ELSE `Out\_of\_Range' END AS status FROM df\_labs\_t5\_local AS T1 LEFT
+JOIN df\_ranges\_t5\_local AS T2 ON T1.lab\_name = T2.lab\_name ``) \})
+time\_sql\_5\_1 \textless- extract\_time(time\_sql\_5\_1\_result)
+cat(''SQL T5.1 Time:``, time\_sql\_5\_1,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance Task
+5.1}\label{aggiornamento-tabella-di-performance-task-5.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T5.1 Non-Equi Join Label'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_5\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_5\_1, \texttt{Time\_SQL\ (s)}
+= time\_sql\_5\_1) ), use.names = TRUE, fill = TRUE )
+print(head(df\_joined\_t5, 5))
+
+\section{----------------------------------------------------}\label{section-26}
+
+\section{TASK 5.2: Contare i Tassi
+Anormali}\label{task-5.2-contare-i-tassi-anormali}
+
+\section{----------------------------------------------------}\label{section-27}
+
+cat(``\nRunning Task 5.2: Summarize Abnormal Rates\ldots{}\n'')
+
+\section{WORKAROUND: Usiamo il risultato completo di SQL come base per
+una gara
+equa}\label{workaround-usiamo-il-risultato-completo-di-sql-come-base-per-una-gara-equa}
+
+dt\_final\_t5\_base \textless- as.data.table(sql\_risultato\_5\_1)
+df\_final\_t5\_base\_df \textless- as.data.frame(dt\_final\_t5\_base)
+
+\section{--- 5.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-7}
+
+time\_df\_5\_2\_result \textless- system.time(\{ df\_risultato\_5\_2
+\textless- df\_final\_t5\_base\_df \%\textgreater\%
+group\_by(patient\_id, lab\_name) \%\textgreater\% summarise( TotalTests
+= n(), AbnormalTests = sum(status == ``Out\_of\_Range''), AbnormalRate =
+AbnormalTests / TotalTests, .groups = `drop' ) \}) time\_df\_5\_2
+\textless- extract\_time(time\_df\_5\_2\_result) cat(``DataFrame T5.2
+Time:'', time\_df\_5\_2, ``seconds.\n'')
+
+\section{--- 5.2.2: Data.table ---}\label{data.table-4}
+
+time\_dt\_5\_2\_result \textless- system.time(\{ dt\_risultato\_5\_2
+\textless- dt\_final\_t5\_base{[}, list( TotalTests = .N, AbnormalTests
+= sum(status == ``Out\_of\_Range''), AbnormalRate = sum(status ==
+``Out\_of\_Range'') / .N ), by = list(patient\_id, lab\_name) {]} \})
+time\_dt\_5\_2 \textless- extract\_time(time\_dt\_5\_2\_result)
+cat(``data.table T5.2 Time:'', time\_dt\_5\_2, ``seconds.\n'')
+
+\section{--- 5.2.3: SQL (sqldf) ---}\label{sql-sqldf-5}
+
+time\_sql\_5\_2\_result \textless- system.time(\{ sql\_risultato\_5\_2
+\textless- sqldf::sqldf('' SELECT patient\_id, lab\_name, COUNT(\emph{)
+AS TotalTests, SUM(CASE WHEN status = `Out\_of\_Range' THEN 1 ELSE 0
+END) AS AbnormalTests, CAST(SUM(CASE WHEN status = `Out\_of\_Range' THEN
+1 ELSE 0 END) AS REAL) / COUNT(}) AS AbnormalRate FROM
+dt\_final\_t5\_base -- Usiamo la tabella base creata GROUP BY
+patient\_id, lab\_name ``) \}) time\_sql\_5\_2 \textless-
+extract\_time(time\_sql\_5\_2\_result) cat(''SQL T5.2 Time:``,
+time\_sql\_5\_2,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance Task
+5.2}\label{aggiornamento-tabella-di-performance-task-5.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T5.2 Summarize Abnormal Rates'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_5\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_5\_2, \texttt{Time\_SQL\ (s)}
+= time\_sql\_5\_2) ), use.names = TRUE, fill = TRUE )
+print(head(df\_risultato\_5\_2, 5))
+
+\section{----------------------------------------------------}\label{section-28}
+
+\section{SALVATAGGIO RISULTATI TASK
+5}\label{salvataggio-risultati-task-5}
+
+\section{----------------------------------------------------}\label{section-29}
+
+fwrite(dt\_risultato\_5\_2, ``Task5\_AbnormalRates\_Results.csv'')
+cat(``\nAnalisi Task 5 completata.\n'')
+
+Task 6: Nearest-Time Matching (Rolling Join)
+
+Goal: Abbinare gli esami (labs) al parametro vitale (vitals) più vicino
+nel tempo.
+
+cat(``\n--- INIZIO TASK 6: NEAREST-TIME ROLLING JOIN ---\n'')
+
+\section{Dati per Task 6}\label{dati-per-task-6}
+
+dt\_labs\_t6 \textless- copy(dt\_labs\_t5) dt\_vitals\_t6\_local
+\textless- copy(dt\_vitals\_t6)
+
+\section{--- PREPARAZIONE DATI TEMPORALI
+---}\label{preparazione-dati-temporali}
+
+cat(``Preparazione dati temporali e Pivot da Long a Wide\ldots{}\n'')
+time\_prep\_result \textless- system.time(\{ \# 1. Conversione in
+POSIXct dt\_labs\_t6{[}, time\_iso := ymd\_hms(as.character(time\_iso),
+tz = ``UTC''){]} dt\_vitals\_t6\_local{[}, time\_iso :=
+ymd\_hms(as.character(time\_iso), tz = ``UTC''){]}
+
+\# 2. PIVOT: Vitals da `long' a `wide' dt\_vitals\_t6\_wide \textless-
+dcast(dt\_vitals\_t6\_local, patient\_id + time\_iso \textasciitilde{}
+vital, value.var = ``value'', fun.aggregate = mean, na.rm = TRUE)
+
+\# 3. Ordina (OBBLIGATORIO per rolling join)
+setorder(dt\_vitals\_t6\_wide, patient\_id, time\_iso) \}) time\_prep
+\textless- extract\_time(time\_prep\_result) cat(``Tempo preparazione
+dati (incl.~Pivot):'', time\_prep, ``seconds.\n'')
+
+\section{----------------------------------------------------}\label{section-30}
+
+\section{TASK 6.1: Rolling Join
+Ottimizzato}\label{task-6.1-rolling-join-ottimizzato}
+
+\section{----------------------------------------------------}\label{section-31}
+
+cat(``\nRunning Task 6.1: Rolling Join\n'')
+
+\section{Rinomina colonna tempo in `x'
+(vitals)}\label{rinomina-colonna-tempo-in-x-vitals}
+
+setnames(dt\_vitals\_t6\_wide, ``time\_iso'', ``vitals\_time'',
+skip\_absent = TRUE)
+
+time\_dt\_rolling\_6\_1\_result \textless- system.time(\{
+
+\# Salva `vitals\_time' in una copia, perché il join la sovrascriverà
+dt\_vitals\_t6\_wide{[}, vitals\_time\_matched := vitals\_time{]}
+
+\# Esegui Rolling Join dt\_join\_result \textless-
+dt\_vitals\_t6\_wide{[}dt\_labs\_t6, on = .(patient\_id, vitals\_time =
+time\_iso), roll = TRUE, mult = ``last''{]}
+
+\# Rinomina colonne tempo setnames(dt\_join\_result, old =
+c(``vitals\_time'', ``vitals\_time\_matched''), new = c(``lab\_time'',
+``vitals\_time''), skip\_absent = TRUE)
+
+\# Calcola il lag if (``lab\_time'' \%in\% names(dt\_join\_result) \&\&
+``vitals\_time'' \%in\% names(dt\_join\_result)) \{ dt\_join\_result{[},
+lag\_minutes := as.numeric(difftime(lab\_time, vitals\_time, units =
+``mins'')){]} \} else \{ dt\_join\_result{[}, lag\_minutes :=
+NA\_real\_{]} \}
+
+\# Rinomina colonne finali value\_col\_name \textless- if (``value''
+\%in\% names(dt\_join\_result)) ``value'' else ``i.value''
+setnames(dt\_join\_result, old = c(``HR'', ``SBP'', value\_col\_name),
+new = c(``nearest\_hr'', ``nearest\_sbp'', ``lab\_value''),
+skip\_absent=TRUE)
+
+dt\_risultato\_6\_1 \textless- dt\_join\_result \})
+
+time\_dt\_rolling\_6\_1 \textless-
+extract\_time(time\_dt\_rolling\_6\_1\_result) cat(``data.table T6.1
+Time (Rolling Join):'', time\_dt\_rolling\_6\_1, ``seconds.\n'')
+print(head(dt\_risultato\_6\_1, 5))
+
+\section{Aggiornamento tabella di performance Task
+6.1}\label{aggiornamento-tabella-di-performance-task-6.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T6.1 Rolling Join'',
+\texttt{Time\_DT\_Rolling\ (s)} = time\_dt\_rolling\_6\_1) ), use.names
+= TRUE, fill = TRUE )
+
+\section{----------------------------------------------------}\label{section-32}
+
+\section{TASK 6.2: Riassunto Correlazione CRP vs
+HR/SBP}\label{task-6.2-riassunto-correlazione-crp-vs-hrsbp}
+
+\section{----------------------------------------------------}\label{section-33}
+
+cat(``\nRunning Task 6.2: Summarize Correlation\ldots{}\n'')
+
+\section{Base di dati per la Task
+6.2}\label{base-di-dati-per-la-task-6.2}
+
+dt\_cor\_base \textless- dt\_risultato\_6\_1{[}!is.na(nearest\_hr) \&
+!is.na(nearest\_sbp) \& lab\_name == ``CRP'' \& !is.na(lab\_value){]}
+df\_cor\_base \textless- as.data.frame(dt\_cor\_base)
+
+\section{--- 6.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-8}
+
+time\_df\_6\_2\_result \textless- system.time(\{ if (nrow(df\_cor\_base)
+\textgreater{} 0) \{ valid\_patients\_df \textless- df\_cor\_base
+\%\textgreater\% count(patient\_id) \%\textgreater\% filter(n
+\textgreater= 2) \%\textgreater\% pull(patient\_id) if
+(length(valid\_patients\_df) \textgreater{} 0) \{ df\_risultato\_6\_2
+\textless- df\_cor\_base \%\textgreater\% filter(patient\_id \%in\%
+valid\_patients\_df) \%\textgreater\% group\_by(patient\_id)
+\%\textgreater\% summarise( cor\_CRP\_HR = cor(lab\_value, nearest\_hr,
+use = ``pairwise.complete.obs''), cor\_CRP\_SBP = cor(lab\_value,
+nearest\_sbp, use = ``pairwise.complete.obs''), .groups = `drop' ) \}
+else \{ df\_risultato\_6\_2 \textless- data.frame() \} \} else \{
+df\_risultato\_6\_2 \textless- data.frame() \} \}) time\_df\_6\_2
+\textless- extract\_time(time\_df\_6\_2\_result) cat(``DataFrame T6.2
+Time:'', time\_df\_6\_2, ``seconds.\n'')
+
+\section{--- 6.2.2: Data.table ---}\label{data.table-5}
+
+time\_dt\_6\_2\_result \textless- system.time(\{ if (nrow(dt\_cor\_base)
+\textgreater{} 0) \{ dt\_risultato\_6\_2 \textless- dt\_cor\_base{[},
+.N, by = patient\_id{]}{[}N \textgreater= 2{]}{[}dt\_cor\_base, on =
+``patient\_id''{]}{[}, .(cor\_CRP\_HR = cor(lab\_value, nearest\_hr, use
+= ``pairwise.complete.obs''), cor\_CRP\_SBP = cor(lab\_value,
+nearest\_sbp, use = ``pairwise.complete.obs'')), by = patient\_id {]} \}
+else \{ dt\_risultato\_6\_2 \textless- data.table() \} \})
+time\_dt\_6\_2 \textless- extract\_time(time\_dt\_6\_2\_result)
+cat(``data.table T6.2 Time:'', time\_dt\_6\_2, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+6.2}\label{aggiornamento-tabella-di-performance-task-6.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T6.2 Summarize Correlation'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_6\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_6\_2) ), use.names = TRUE,
+fill = TRUE ) print(head(dt\_risultato\_6\_2, 5))
+
+\section{----------------------------------------------------}\label{section-34}
+
+\section{SALVATAGGIO RISULTATI TASK
+6}\label{salvataggio-risultati-task-6}
+
+\section{----------------------------------------------------}\label{section-35}
+
+fwrite(dt\_risultato\_6\_1, ``Task6\_RollingJoinResults\_Complete.csv'')
+fwrite(dt\_risultato\_6\_2, ``Task6\_CorrelationResults\_Complete.csv'')
+cat(``\nAnalisi Task 6 completata.\n'')
+
+Task 7: Filtro Genomico (ATAC-seq)
+
+Goal: Estrarre picchi su chr2 (2-4Mb) e trovare i Top 50 per score.
+
+cat(``\n--- INIZIO TASK 7: FILTRAGGIO GENOMICO ATAC-SEQ ---\n'')
+
+\section{Dati per Task 7}\label{dati-per-task-7}
+
+dt\_peaks\_t7\_local \textless- copy(dt\_peaks\_t7) df\_peaks\_t7\_local
+\textless- copy(df\_peaks\_t7)
+
+\section{Definisci i limiti per il
+filtro}\label{definisci-i-limiti-per-il-filtro}
+
+chr\_target \textless- ``chr2'' start\_min \textless- 2000000 start\_max
+\textless- 4000000
+
+\section{----------------------------------------------------}\label{section-36}
+
+\section{TASK 7.1: Filtrare per Regione
+Genomica}\label{task-7.1-filtrare-per-regione-genomica}
+
+\section{----------------------------------------------------}\label{section-37}
+
+cat(``\nRunning Task 7.1: Filter by Genomic Region\ldots{}\n'')
+
+\section{--- 7.1.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-9}
+
+time\_df\_7\_1\_result \textless- system.time(\{ df\_filtered\_t7
+\textless- df\_peaks\_t7\_local \%\textgreater\% filter(chr ==
+chr\_target \& start \textgreater= start\_min \& start \textless=
+start\_max) \}) time\_df\_7\_1 \textless-
+extract\_time(time\_df\_7\_1\_result) cat(``DataFrame T7.1 Time:'',
+time\_df\_7\_1, ``seconds.\n'')
+
+\section{--- 7.1.2: Data.table ---}\label{data.table-6}
+
+time\_dt\_7\_1\_result \textless- system.time(\{ dt\_filtered\_t7
+\textless- dt\_peaks\_t7\_local{[}chr == chr\_target \& start
+\textgreater= start\_min \& start \textless= start\_max{]} \})
+time\_dt\_7\_1 \textless- extract\_time(time\_dt\_7\_1\_result)
+cat(``data.table T7.1 Time:'', time\_dt\_7\_1, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+7.1}\label{aggiornamento-tabella-di-performance-task-7.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T7.1 Filter Genomic Region'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_7\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_7\_1) ), use.names = TRUE,
+fill = TRUE ) print(head(dt\_filtered\_t7, 5))
+
+\section{----------------------------------------------------}\label{section-38}
+
+\section{TASK 7.2: Trovare i Top 50 Picchi per
+Score}\label{task-7.2-trovare-i-top-50-picchi-per-score}
+
+\section{----------------------------------------------------}\label{section-39}
+
+cat(``\nRunning Task 7.2: Find Top 50 Peaks by Score\ldots{}\n'')
+
+\section{--- 7.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-10}
+
+time\_df\_7\_2\_result \textless- system.time(\{ df\_top50\_t7
+\textless- df\_filtered\_t7 \%\textgreater\% arrange(desc(score))
+\%\textgreater\% slice\_head(n = 50) \}) time\_df\_7\_2 \textless-
+extract\_time(time\_df\_7\_2\_result) cat(``DataFrame T7.2 Time:'',
+time\_df\_7\_2, ``seconds.\n'')
+
+\section{--- 7.2.2: Data.table ---}\label{data.table-7}
+
+dt\_filtered\_t7\_copy \textless- copy(dt\_filtered\_t7) \# Copia per
+setorder time\_dt\_7\_2\_result \textless- system.time(\{
+setorder(dt\_filtered\_t7\_copy, -score) \# Ordina in-place
+dt\_top50\_t7 \textless- head(dt\_filtered\_t7\_copy, 50) \# Prendi i
+primi 50 \}) time\_dt\_7\_2 \textless-
+extract\_time(time\_dt\_7\_2\_result) cat(``data.table T7.2 Time
+(setorder):'', time\_dt\_7\_2, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+7.2}\label{aggiornamento-tabella-di-performance-task-7.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T7.2 Top 50 by Score'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_7\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_7\_2) ), use.names = TRUE,
+fill = TRUE ) print(head(dt\_top50\_t7, 5))
+
+\section{----------------------------------------------------}\label{section-40}
+
+\section{SALVATAGGIO RISULTATI TASK
+7}\label{salvataggio-risultati-task-7}
+
+\section{----------------------------------------------------}\label{section-41}
+
+fwrite(dt\_top50\_t7, ``Task7\_Top50Peaks\_Results.csv'')
+cat(``\nAnalisi Task 7 completata.\n'')
+
+Task 8: Statistiche Robuste e Pivot
+
+Goal: Calcolare statistiche multiple (mean, median, Q1, Q3) e filtrare
+dove mean\_treated \textgreater{} mean\_control.
+
+cat(``\n--- INIZIO TASK 8: STATISTICHE ROBUSTE E FILTRO ---\n'')
+
+\section{Dati per Task 8}\label{dati-per-task-8}
+
+dt\_counts\_t8 \textless- copy(dt\_counts) dt\_metadata\_t8 \textless-
+copy(dt\_metadata) df\_counts\_t8 \textless- copy(df\_counts)
+df\_metadata\_t8 \textless- copy(df\_metadata)
+
+\section{1. Preparazione: Join}\label{preparazione-join}
+
+df\_joined\_t8 \textless- df\_counts\_t8 \%\textgreater\%
+left\_join(df\_metadata\_t8, by = ``sample\_id'') dt\_joined\_t8
+\textless- dt\_counts\_t8{[}dt\_metadata\_t8, on = ``sample\_id''{]}
+
+\section{----------------------------------------------------}\label{section-42}
+
+\section{TASK 8.1: Calcolo Statistiche
+Robuste}\label{task-8.1-calcolo-statistiche-robuste}
+
+\section{----------------------------------------------------}\label{section-43}
+
+cat(``\nRunning Task 8.1: Calculate Robust Stats\ldots{}\n'')
+
+\section{--- 8.1.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-11}
+
+time\_df\_8\_1\_result \textless- system.time(\{ df\_stats\_t8
+\textless- df\_joined\_t8 \%\textgreater\% group\_by(gene, condition)
+\%\textgreater\% summarise( mean\_count = mean(count, na.rm=T),
+median\_count = median(count, na.rm=T), Q1 = quantile(count, 0.25,
+na.rm=T), Q3 = quantile(count, 0.75, na.rm=T), .groups = `drop' ) \})
+time\_df\_8\_1 \textless- extract\_time(time\_df\_8\_1\_result)
+cat(``DataFrame T8.1 Time:'', time\_df\_8\_1, ``seconds.\n'')
+
+\section{--- 8.1.2: Data.table ---}\label{data.table-8}
+
+time\_dt\_8\_1\_result \textless- system.time(\{ dt\_stats\_t8
+\textless- dt\_joined\_t8{[}, list( mean\_count = mean(count, na.rm=T),
+median\_count = median(count, na.rm=T), Q1 = quantile(count, 0.25,
+na.rm=T), Q3 = quantile(count, 0.75, na.rm=T) ), by = list(gene,
+condition) {]} \}) time\_dt\_8\_1 \textless-
+extract\_time(time\_dt\_8\_1\_result) cat(``data.table T8.1 Time:'',
+time\_dt\_8\_1, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+8.1}\label{aggiornamento-tabella-di-performance-task-8.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T8.1 Calculate Robust Stats'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_8\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_8\_1) ), use.names = TRUE,
+fill = TRUE ) print(head(dt\_stats\_t8, 5))
+
+\section{----------------------------------------------------}\label{section-44}
+
+\section{TASK 8.2: Filtro per Differenza di Media (treated
+\textgreater{}
+control)}\label{task-8.2-filtro-per-differenza-di-media-treated-control}
+
+\section{----------------------------------------------------}\label{section-45}
+
+cat(``\nRunning Task 8.2: Filter by Treated \textgreater{} Control
+Mean\ldots{}\n'')
+
+\section{--- 8.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-12}
+
+time\_df\_8\_2\_result \textless- system.time(\{ df\_risultato\_8\_2
+\textless- df\_stats\_t8 \%\textgreater\% pivot\_wider(names\_from =
+condition, values\_from = c(mean\_count, median\_count, Q1, Q3))
+\%\textgreater\% filter(mean\_count\_treated \textgreater{}
+mean\_count\_control) \}) time\_df\_8\_2 \textless-
+extract\_time(time\_df\_8\_2\_result) cat(``DataFrame T8.2 Time:'',
+time\_df\_8\_2, ``seconds.\n'')
+
+\section{--- 8.2.2: Data.table ---}\label{data.table-9}
+
+time\_dt\_8\_2\_result \textless- system.time(\{ dt\_wide \textless-
+dcast(dt\_stats\_t8, gene \textasciitilde{} condition, value.var =
+c(``mean\_count'', ``median\_count'', ``Q1'', ``Q3''))
+dt\_risultato\_8\_2 \textless- dt\_wide{[}mean\_count\_treated
+\textgreater{} mean\_count\_control{]} \}) time\_dt\_8\_2 \textless-
+extract\_time(time\_dt\_8\_2\_result) cat(``data.table T8.2 Time:'',
+time\_dt\_8\_2, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+8.2}\label{aggiornamento-tabella-di-performance-task-8.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T8.2 Filter (Treated
+\textgreater{} Control)'', \texttt{Time\_DataFrame\ (s)} =
+time\_df\_8\_2, \texttt{Time\_DataTable\ (s)} = time\_dt\_8\_2) ),
+use.names = TRUE, fill = TRUE ) print(head(dt\_risultato\_8\_2, 5))
+
+\section{----------------------------------------------------}\label{section-46}
+
+\section{SALVATAGGIO RISULTATI TASK
+8}\label{salvataggio-risultati-task-8}
+
+\section{----------------------------------------------------}\label{section-47}
+
+fwrite(dt\_risultato\_8\_2, ``Task8\_TreatedVsControl\_Results.csv'')
+cat(``\nAnalisi Task 8 completata.\n'')
+
+Task 9: Trasformazione Dati (Wide -\textgreater{} Long -\textgreater{}
+Wide)
+
+Goal: Pivotare una matrice ``larga'', aggiungere totali, e aggregare per
+condition.
+
+cat(``\n--- INIZIO TASK 9: WIDE -\textgreater{} LONG -\textgreater{}
+WIDE TRANSFORMATION ---\n'')
+
+\section{Dati per Task 9}\label{dati-per-task-9}
+
+dt\_counts\_wide\_t9\_local \textless- copy(dt\_counts\_wide\_t9)
+dt\_metadata\_t9\_local \textless- copy(dt\_metadata)
+df\_counts\_wide\_t9\_local \textless- copy(df\_counts\_wide\_t9)
+df\_metadata\_t9\_local \textless- copy(df\_metadata)
+
+setkey(dt\_metadata\_t9\_local, sample\_id) SAMPLE\_COLS\_INDICES
+\textless- 2:ncol(df\_counts\_wide\_t9\_local)
+
+\section{--- TASK 9.1: Pipeline di Trasformazione
+---}\label{task-9.1-pipeline-di-trasformazione}
+
+cat(``\n--- Running Task 9.1: Transformation Pipeline\ldots{}\n'')
+
+\section{--- 9.1.1: Data.frame / Tidyverse
+---}\label{data.frame-tidyverse}
+
+time\_df\_9\_1\_result \textless- system.time(\{ \# 1. Wide
+-\textgreater{} Long df\_long \textless- df\_counts\_wide\_t9\_local
+\%\textgreater\% pivot\_longer(cols = all\_of(SAMPLE\_COLS\_INDICES),
+names\_to = ``sample\_id'', values\_to = ``count'')
+
+\begin{verbatim}
+# 2. Add per-sample totals
+\end{verbatim}
+
+df\_with\_totals \textless- df\_long \%\textgreater\%
+group\_by(sample\_id) \%\textgreater\% mutate(sample\_total = sum(count,
+na.rm = TRUE)) \%\textgreater\% ungroup()
+
+\begin{verbatim}
+# 3. Aggregare per (gene, condition) e Long -> Wide
+\end{verbatim}
+
+df\_final\_wide \textless- df\_with\_totals \%\textgreater\%
+left\_join(df\_metadata\_t9\_local, by = ``sample\_id'')
+\%\textgreater\% group\_by(gene, condition) \%\textgreater\%
+summarise(mean\_count = mean(count, na.rm = TRUE), .groups = `drop')
+\%\textgreater\% pivot\_wider(names\_from = condition, values\_from =
+mean\_count)
+
+df\_risultato\_9\_1 \textless- df\_final\_wide \})
+
+time\_df\_9\_1 \textless- extract\_time(time\_df\_9\_1\_result)
+cat(``DataFrame T9.1 Time (Tidyverse):'', time\_df\_9\_1,
+``seconds.\n'')
+
+\section{--- 9.1.2: Data.table (melt + dcast)
+---}\label{data.table-melt-dcast}
+
+time\_dt\_9\_1\_result \textless- system.time(\{ \# 1. Wide
+-\textgreater{} Long (melt) dt\_long \textless-
+melt(dt\_counts\_wide\_t9\_local, id.vars = ``gene'', measure.vars =
+SAMPLE\_COLS\_INDICES, variable.name = ``sample\_id'', value.name =
+``count'')
+
+\# 2. Add per-sample totals dt\_sample\_totals \textless- dt\_long{[},
+.(sample\_total = sum(count, na.rm = TRUE)), by = sample\_id{]}
+dt\_long\_with\_totals \textless- dt\_sample\_totals{[}dt\_long, on =
+``sample\_id''{]}
+
+\# 3. Aggregare per (gene, condition) e Long -\textgreater{} Wide
+dt\_joined \textless- dt\_metadata\_t9\_local{[}dt\_long\_with\_totals,
+on = ``sample\_id''{]} dt\_risultato\_9\_1 \textless- dcast(dt\_joined,
+gene \textasciitilde{} condition, value.var = ``count'', fun.aggregate =
+mean) \}) time\_dt\_9\_1 \textless-
+extract\_time(time\_dt\_9\_1\_result) cat(``data.table T9.1 Time
+(melt/dcast):'', time\_dt\_9\_1, ``seconds.\n'')
+
+\section{Stampe di controllo (usa le variabili DT, ma quelle DF sono
+simili)}\label{stampe-di-controllo-usa-le-variabili-dt-ma-quelle-df-sono-simili}
+
+cat(``--- PASSO 1 (Wide -\textgreater{} Long) RISULTATO: ---\n'')
+print(head(dt\_long, 3)) cat(``\n--- PASSO 2 (Add Totals) RISULTATO:
+---\n'') print(head(dt\_long\_with\_totals, 3)) cat(``\n--- PASSO 3
+(Finale Wide) RISULTATO: ---\n'') print(head(dt\_risultato\_9\_1, 3))
+
+\section{Aggiornamento tabella di performance Task
+9}\label{aggiornamento-tabella-di-performance-task-9}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T9.1
+Wide-\textgreater Long-\textgreater Wide'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_9\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_9\_1) ), use.names = TRUE,
+fill = TRUE )
+
+\section{----------------------------------------------------}\label{section-48}
+
+\section{SALVATAGGIO RISULTATI TASK
+9}\label{salvataggio-risultati-task-9}
+
+\section{----------------------------------------------------}\label{section-49}
+
+fwrite(dt\_risultato\_9\_1, ``Task9\_GeneXCondition\_Results.csv'')
+cat(``\nAnalisi Task 9 completata.\n'')
+
+Task 10: ATAC-to-Gene Mapping (Join Spaziale)
+
+Goal: Mappare picchi ATAC ai geni e calcolare la lunghezza di
+sovrapposizione.
+
+cat(``\n--- INIZIO TASK 10: ATAC-TO-GENE SPATIAL JOIN ---\n'')
+
+\section{Dati per Task 10}\label{dati-per-task-10}
+
+dt\_peaks\_t10\_local \textless- copy(dt\_peaks\_t7) \# Riusiamo i
+picchi dt\_genes\_t10\_local \textless- copy(dt\_genes\_t10) \# Riusiamo
+i geni
+
+\section{Pulizia nomi colonne}\label{pulizia-nomi-colonne-1}
+
+setnames(dt\_peaks\_t10\_local, c(``V1'', ``V2'', ``V3'', ``V4'',
+``V5''), c(``chr'', ``start'', ``end'', ``peaks\_id'', ``score''),
+skip\_absent = TRUE) setnames(dt\_genes\_t10\_local, c(``V1'', ``V2'',
+``V3'', ``V4''), c(``chr'', ``start'', ``end'', ``gene''), skip\_absent
+= TRUE)
+
+df\_genes\_t10\_local \textless- as.data.frame(dt\_genes\_t10\_local)
+df\_peaks\_t10\_local \textless- as.data.frame(dt\_peaks\_t10\_local)
+
+\section{----------------------------------------------------}\label{section-50}
+
+\section{TASK 10.1: Join Spaziale e Conteggio
+Picchi}\label{task-10.1-join-spaziale-e-conteggio-picchi}
+
+\section{----------------------------------------------------}\label{section-51}
+
+cat(``\nRunning Task 10.1: Spatial Join \& Peak Count\ldots{}\n'')
+
+\section{--- 10.1.1: Data.frame / Dplyr (Join ``esplosivo'' + filtro)
+---}\label{data.frame-dplyr-join-esplosivo-filtro}
+
+time\_df\_10\_1\_result \textless- system.time(\{ df\_overlapped
+\textless- df\_peaks\_t10\_local \%\textgreater\%
+left\_join(df\_genes\_t10\_local, by = ``chr'', relationship =
+``many-to-many'') \%\textgreater\% filter(start.x \textless= end.y \&
+end.x \textgreater= start.y)
+
+df\_count \textless- df\_overlapped \%\textgreater\% group\_by(gene)
+\%\textgreater\% summarise(peak\_count = n(), .groups = `drop')
+
+df\_risultato\_10\_1 \textless- df\_count \}) time\_df\_10\_1 \textless-
+extract\_time(time\_df\_10\_1\_result) cat(``DataFrame T10.1 Time:'',
+time\_df\_10\_1, ``seconds.\n'')
+
+\section{--- 10.1.2: Data.table (foverlaps Ottimizzato)
+---}\label{data.table-foverlaps-ottimizzato}
+
+time\_dt\_10\_1\_result \textless- system.time(\{
+setkey(dt\_peaks\_t10\_local, chr, start, end)
+setkey(dt\_genes\_t10\_local, chr, start, end)
+
+dt\_overlapped \textless- foverlaps(dt\_peaks\_t10\_local,
+dt\_genes\_t10\_local, nomatch = 0)
+
+dt\_count \textless- dt\_overlapped{[}, .(peak\_count = .N), by =
+.(gene){]} dt\_risultato\_10\_1 \textless- dt\_count \}) time\_dt\_10\_1
+\textless- extract\_time(time\_dt\_10\_1\_result) cat(``data.table T10.1
+Time:'', time\_dt\_10\_1, ``seconds.\n'')
+
+\section{--- 10.1.3: SQL (sqldf) ---}\label{sql-sqldf-6}
+
+time\_sql\_10\_1\_result \textless- system.time(\{ sql\_risultato\_10\_1
+\textless- sqldf::sqldf('' SELECT T2.gene, COUNT(T1.chr) AS peak\_count
+FROM df\_peaks\_t10\_local AS T1 INNER JOIN df\_genes\_t10\_local AS T2
+ON T1.chr = T2.chr WHERE T1.start \textless= T2.end AND T1.end
+\textgreater= T2.start GROUP BY T2.gene ``) \}) time\_sql\_10\_1
+\textless- extract\_time(time\_sql\_10\_1\_result) cat(''SQL T10.1
+Time:``, time\_sql\_10\_1,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance Task
+10.1}\label{aggiornamento-tabella-di-performance-task-10.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T10.1 Spatial Join \& Peak
+Count'', \texttt{Time\_DataFrame\ (s)} = time\_df\_10\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_10\_1, \texttt{Time\_SQL\ (s)}
+= time\_sql\_10\_1) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_risultato\_10\_1, 5))
+
+\section{----------------------------------------------------}\label{section-52}
+
+\section{TASK 10.2: Calcolare la Lunghezza di Overlap e Top 20
+Geni}\label{task-10.2-calcolare-la-lunghezza-di-overlap-e-top-20-geni}
+
+\section{----------------------------------------------------}\label{section-53}
+
+cat(``\nRunning Task 10.2: Overlap Length and Top 20 Geni\ldots{}\n'')
+
+\section{--- 10.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-13}
+
+time\_df\_10\_2\_result \textless- system.time(\{ \# Esegui nuovamente
+il join spaziale df\_overlapped\_base \textless- df\_peaks\_t10\_local
+\%\textgreater\% left\_join(df\_genes\_t10\_local, by = ``chr'',
+relationship = ``many-to-many'') \%\textgreater\% filter(start.x
+\textless= end.y \& end.x \textgreater= start.y)
+
+df\_overlap\_sum \textless- df\_overlapped\_base \%\textgreater\%
+mutate( overlap\_len = calc\_overlap\_length(start.x, end.x, start.y,
+end.y) ) \%\textgreater\% group\_by(gene) \%\textgreater\%
+summarise(total\_overlap\_bp = sum(overlap\_len), .groups = `drop')
+\%\textgreater\% arrange(desc(total\_overlap\_bp)) \%\textgreater\%
+slice\_head(n = 20)
+
+df\_risultato\_10\_2 \textless- df\_overlap\_sum \}) time\_df\_10\_2
+\textless- extract\_time(time\_df\_10\_2\_result) cat(``DataFrame T10.2
+Time:'', time\_df\_10\_2, ``seconds.\n'')
+
+\section{--- 10.2.2: Data.table (foverlaps + Aggregazione)
+---}\label{data.table-foverlaps-aggregazione}
+
+time\_dt\_10\_2\_result \textless- system.time(\{
+
+\# Prepariamo le chiavi (necessario per foverlaps)
+setkey(dt\_peaks\_t10\_local, chr, start, end)
+setnames(dt\_genes\_t10\_local, old = c(``start'', ``end''), new =
+c(``gene\_start'', ``gene\_end''), skip\_absent = TRUE)
+setkey(dt\_genes\_t10\_local, chr, gene\_start, gene\_end)
+
+\# Eseguire il join spaziale dt\_overlapped\_final \textless- foverlaps(
+dt\_peaks\_t10\_local, dt\_genes\_t10\_local, by.x = c(``chr'',
+``start'', ``end''), by.y = c(``chr'', ``gene\_start'', ``gene\_end''),
+nomatch = 0 )
+
+\# Calcolare la lunghezza di overlap dt\_overlapped\_final{[},
+overlap\_len := calc\_overlap\_length(start, end, gene\_start,
+gene\_end){]}
+
+\# Aggregare per gene e selezionare i 20 geni dt\_overlap\_sum
+\textless- dt\_overlapped\_final{[} , .(total\_overlap\_bp =
+sum(overlap\_len)), by = gene
+{]}{[}order(-total\_overlap\_bp){]}{[}1:20{]}
+
+dt\_risultato\_10\_2 \textless- dt\_overlap\_sum \}) time\_dt\_10\_2
+\textless- extract\_time(time\_dt\_10\_2\_result) cat(``data.table T10.2
+Time (Optimized):'', time\_dt\_10\_2, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance
+10.2}\label{aggiornamento-tabella-di-performance-10.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T10.2 Overlap Length \& Top 20'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_10\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_10\_2, \texttt{Time\_SQL\ (s)}
+= NA\_real\_) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_risultato\_10\_2, 5))
+
+\section{----------------------------------------------------}\label{section-54}
+
+\section{SALVATAGGIO RISULTATI TASK
+10}\label{salvataggio-risultati-task-10}
+
+\section{----------------------------------------------------}\label{section-55}
+
+fwrite(dt\_risultato\_10\_2, ``Task10\_Top20Overlap\_Results.csv'')
+cat(``\nAnalisi Task 10 completata.\n'')
+
+Task 11: Mappare SNP ai Geni
+
+Goal: Trovare sovrapposizioni tra SNP (varianti) e geni, e contare le
+mutazioni ``HIGH'' impact.
+
+cat(``\n--- INIZIO TASK 11: SNP-TO-GENE SPATIAL JOIN ---\n'')
+
+\section{Dati per Task 11}\label{dati-per-task-11}
+
+dt\_variants\_t11 \textless- copy(dt\_variants\_t11) dt\_genes\_t11
+\textless- copy(dt\_genes\_t10) \# Riusiamo i geni
+
+\section{TASK 11.1: Convert variant positions to 1-bp
+intervals}\label{task-11.1-convert-variant-positions-to-1-bp-intervals}
+
+dt\_variants\_t11{[}, variant\_start := pos{]} dt\_variants\_t11{[},
+variant\_end := pos{]}
+
+df\_variants\_t11 \textless- as.data.frame(dt\_variants\_t11)
+df\_genes\_t11 \textless- as.data.frame(dt\_genes\_t11)
+
+\section{----------------------------------------------------}\label{section-56}
+
+\section{TASK 11.1/11.2: Join Spaziale, Filtro `HIGH' e Sommario per
+Gene/Campione}\label{task-11.111.2-join-spaziale-filtro-high-e-sommario-per-genecampione}
+
+\section{----------------------------------------------------}\label{section-57}
+
+cat(``\nRunning Task 11.1/11.2: Spatial Join, Filter HIGH, and
+Summarize\ldots{}\n'')
+
+\section{--- 11.1.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-14}
+
+time\_df\_11\_1\_result \textless- system.time(\{ df\_overlapped\_snps
+\textless- df\_variants\_t11 \%\textgreater\% filter(impact == `HIGH')
+\%\textgreater\% left\_join(df\_genes\_t11, by = ``chr'', relationship =
+``many-to-many'') \%\textgreater\% filter(variant\_start \textless= end
+\& variant\_end \textgreater= start)
+
+df\_summary\_11\_2 \textless- df\_overlapped\_snps \%\textgreater\%
+group\_by(gene, sample\_id) \%\textgreater\%
+summarise(high\_impact\_count = n(), .groups = `drop')
+
+df\_risultato\_11\_2 \textless- df\_summary\_11\_2 \}) time\_df\_11\_1
+\textless- extract\_time(time\_df\_11\_1\_result) cat(``DataFrame
+T11.1/2 Time:'', time\_df\_11\_1, ``seconds.\n'')
+
+\section{--- 11.1.2: Data.table (Non-Equi Join Ottimizzato)
+---}\label{data.table-non-equi-join-ottimizzato}
+
+time\_dt\_11\_1\_result \textless- system.time(\{ dt\_variants\_high
+\textless- dt\_variants\_t11{[}impact == `HIGH'{]}
+setkey(dt\_variants\_high, chr, variant\_start, variant\_end)
+setkey(dt\_genes\_t11, chr, start, end)
+
+dt\_overlapped\_snps \textless- dt\_genes\_t11{[}dt\_variants\_high, on
+= .(chr, start \textless= variant\_end, end \textgreater=
+variant\_start), nomatch = 0{]}
+
+dt\_risultato\_11\_2 \textless- dt\_overlapped\_snps{[},
+.(high\_impact\_count = .N), by = .(gene, sample\_id){]} \})
+time\_dt\_11\_1 \textless- extract\_time(time\_dt\_11\_1\_result)
+cat(``data.table T11.1/2 Time:'', time\_dt\_11\_1, ``seconds.\n'')
+
+\section{--- 11.1.3: SQL (sqldf) ---}\label{sql-sqldf-7}
+
+time\_sql\_11\_1\_result \textless- system.time(\{ sql\_risultato\_11\_2
+\textless- sqldf::sqldf('' SELECT T2.gene, T1.sample\_id, COUNT(T1.chr)
+AS high\_impact\_count FROM df\_variants\_t11 AS T1 INNER JOIN
+df\_genes\_t11 AS T2 ON T1.chr = T2.chr WHERE T1.impact = `HIGH' AND
+T1.variant\_start \textless= T2.end AND T1.variant\_end \textgreater=
+T2.start GROUP BY T2.gene, T1.sample\_id ``) \}) time\_sql\_11\_1
+\textless- extract\_time(time\_sql\_11\_1\_result) cat(''SQL T11.1/2
+Time:``, time\_sql\_11\_1,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance Task
+11.1/2}\label{aggiornamento-tabella-di-performance-task-11.12}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T11.1/2 Join, Filter \&
+Summary'', \texttt{Time\_DataFrame\ (s)} = time\_df\_11\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_11\_1, \texttt{Time\_SQL\ (s)}
+= time\_sql\_11\_1) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_risultato\_11\_2, 5))
+
+\section{----------------------------------------------------}\label{section-58}
+
+\section{TASK 11.3: Lista Geni più frequentemente mutati (Top
+10)}\label{task-11.3-lista-geni-piuxf9-frequentemente-mutati-top-10}
+
+\section{----------------------------------------------------}\label{section-59}
+
+cat(``\nRunning Task 11.3: Find Top 10 most frequently hit
+genes\ldots{}\n'')
+
+\section{Base dati}\label{base-dati}
+
+df\_risultato\_11\_2\_base \textless-
+as.data.frame(dt\_risultato\_11\_2)
+
+\section{--- 11.3.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-15}
+
+time\_df\_11\_3\_result \textless- system.time(\{
+df\_genes\_all\_samples \textless- df\_risultato\_11\_2\_base
+\%\textgreater\% group\_by(gene) \%\textgreater\%
+summarise(n\_samples\_hit = n\_distinct(sample\_id), .groups = `drop')
+\%\textgreater\% arrange(desc(n\_samples\_hit)) \%\textgreater\%
+slice\_head(n = 10) \# Prendiamo i Top 10 \}) time\_df\_11\_3 \textless-
+extract\_time(time\_df\_11\_3\_result) cat(``DataFrame T11.3 Time:'',
+time\_df\_11\_3, ``seconds.\n'')
+
+\section{--- 11.3.2: Data.table ---}\label{data.table-10}
+
+time\_dt\_11\_3\_result \textless- system.time(\{
+dt\_genes\_all\_samples \textless- dt\_risultato\_11\_2{[},
+.(n\_samples\_hit = uniqueN(sample\_id)), by = gene
+{]}{[}order(-n\_samples\_hit) {]}{[}1:10{]} \# Prendiamo i Top 10 \})
+time\_dt\_11\_3 \textless- extract\_time(time\_dt\_11\_3\_result)
+cat(``data.table T11.3 Time:'', time\_dt\_11\_3, ``seconds.\n'')
+
+\section{--- 11.3.3: SQL (sqldf) ---}\label{sql-sqldf-8}
+
+sql\_risultato\_11\_2\_sql \textless- dt\_risultato\_11\_2
+time\_sql\_11\_3\_result \textless- system.time(\{
+sql\_genes\_all\_samples \textless- sqldf::sqldf( ``SELECT gene,
+COUNT(DISTINCT sample\_id) AS n\_samples\_hit FROM
+sql\_risultato\_11\_2\_sql GROUP BY gene ORDER BY n\_samples\_hit DESC
+LIMIT 10'' \# Prendiamo i Top 10 ) \}) time\_sql\_11\_3 \textless-
+extract\_time(time\_sql\_11\_3\_result) cat(``SQL T11.3 Time:'',
+time\_sql\_11\_3, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+11.3}\label{aggiornamento-tabella-di-performance-task-11.3}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T11.3 Top 10 Hit Genes'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_11\_3,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_11\_3, \texttt{Time\_SQL\ (s)}
+= time\_sql\_11\_3) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_genes\_all\_samples, 10)) \# Stampa i Top 10
+
+\section{----------------------------------------------------}\label{section-60}
+
+\section{SALVATAGGIO RISULTATI TASK
+11}\label{salvataggio-risultati-task-11}
+
+\section{----------------------------------------------------}\label{section-61}
+
+fwrite(dt\_risultato\_11\_2, ``Task11\_HighImpactSummary\_Results.csv'')
+fwrite(dt\_genes\_all\_samples, ``Task11\_Top10HitGenes\_Results.csv'')
+cat(``\nAnalisi Task 11 completata.\n'')
+
+Task 12: Combinare Coorti
+
+Goal: Unire cohortA e cohortB in modo sicuro e analizzare i 100 geni più
+variabili.
+
+cat(``\n--- INIZIO TASK 12: COMBINE COHORTS ---\n'')
+
+\section{Dati per Task 12}\label{dati-per-task-12}
+
+dt\_cohortA\_local \textless- copy(dt\_cohortA) df\_cohortA\_local
+\textless- copy(df\_cohortA) dt\_cohortB\_local \textless-
+copy(dt\_cohortB) df\_cohortB\_local \textless- copy(df\_cohortB)
+
+\section{----------------------------------------------------}\label{section-62}
+
+\section{TASK 12.1: Combinare Coorti e
+Ordinare}\label{task-12.1-combinare-coorti-e-ordinare}
+
+\section{----------------------------------------------------}\label{section-63}
+
+cat(``\nRunning Task 12.1: Combine Cohorts (3-way
+comparison)\ldots{}\n'')
+
+\section{--- 12.1.1: Data.frame / Dplyr (bind\_rows)
+---}\label{data.frame-dplyr-bind_rows}
+
+time\_df\_12\_1\_result \textless- system.time(\{ df\_combined
+\textless- bind\_rows(df\_cohortA\_local, df\_cohortB\_local)
+\%\textgreater\% arrange(cohort, condition, sample\_id)
+df\_risultato\_12\_1\_df \textless- df\_combined \}) time\_df\_12\_1
+\textless- extract\_time(time\_df\_12\_1\_result) cat(``DataFrame T12.1
+Time (bind\_rows):'', time\_df\_12\_1, ``seconds.\n'')
+
+\section{--- 12.1.2: Data.table (rbindlist)
+---}\label{data.table-rbindlist}
+
+time\_dt\_12\_1\_result \textless- system.time(\{ dt\_combined
+\textless- rbindlist(list(dt\_cohortA\_local, dt\_cohortB\_local),
+use.names = TRUE, fill = TRUE) setorder(dt\_combined, cohort, condition,
+sample\_id) dt\_risultato\_12\_1\_dt \textless- dt\_combined \})
+time\_dt\_12\_1 \textless- extract\_time(time\_dt\_12\_1\_result)
+cat(``data.table T12.1 Time (rbindlist):'', time\_dt\_12\_1,
+``seconds.\n'')
+
+\section{--- 12.1.3: SQL (sqldf) ---}\label{sql-sqldf-9}
+
+time\_sql\_12\_1\_result \textless- system.time(\{
+sql\_risultato\_12\_1\_sql \textless- sqldf::sqldf('' SELECT * FROM
+df\_cohortA\_local UNION ALL SELECT * FROM df\_cohortB\_local ORDER BY
+cohort, condition, sample\_id ``) \}) time\_sql\_12\_1 \textless-
+extract\_time(time\_sql\_12\_1\_result) cat(''SQL T12.1 Time (UNION
+ALL):``, time\_sql\_12\_1,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance Task
+12.1}\label{aggiornamento-tabella-di-performance-task-12.1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T12.1 Combine \& Sort Cohorts'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_12\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_12\_1, \texttt{Time\_SQL\ (s)}
+= time\_sql\_12\_1) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_risultato\_12\_1\_dt, 5))
+
+\section{----------------------------------------------------}\label{section-64}
+
+\section{TASK 12.2: Join e Calcolo Medie (Top 100 Geni più
+Variabili)}\label{task-12.2-join-e-calcolo-medie-top-100-geni-piuxf9-variabili}
+
+\section{----------------------------------------------------}\label{section-65}
+
+cat(``\nRunning Task 12.2: Join \& Calculate Cohort Means (Top
+100)\ldots{}\n'')
+
+\section{--- 12.2.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-16}
+
+time\_df\_12\_2\_result \textless- system.time(\{ \# 1. Trova i Top 100
+geni più variabili top100\_genes\_df \textless- df\_counts
+\%\textgreater\% group\_by(gene) \%\textgreater\% summarise(variance =
+var(count, na.rm = TRUE)) \%\textgreater\% arrange(desc(variance))
+\%\textgreater\% slice\_head(n = 100) \%\textgreater\% pull(gene)
+
+\# 2. Join e Calcolo Medie df\_risultato\_12\_2 \textless- df\_counts
+\%\textgreater\% filter(gene \%in\% top100\_genes\_df) \%\textgreater\%
+left\_join(df\_risultato\_12\_1\_df, by = ``sample\_id'')
+\%\textgreater\% filter(!is.na(cohort)) \%\textgreater\%
+group\_by(cohort, condition, gene) \%\textgreater\%
+summarise(mean\_count = mean(count, na.rm = TRUE), .groups = `drop') \})
+time\_df\_12\_2 \textless- extract\_time(time\_df\_12\_2\_result)
+cat(``DataFrame T12.2 Time:'', time\_df\_12\_2, ``seconds.\n'')
+
+\section{--- 12.2.2: Data.table ---}\label{data.table-11}
+
+time\_dt\_12\_2\_result \textless- system.time(\{ \# 1. Trova i Top 100
+geni più variabili top100\_genes\_dt \textless- dt\_counts{[},
+.(variance = var(count, na.rm = TRUE)), by =
+gene{]}{[}order(-variance){]}{[}1:100, gene{]}
+
+\# 2. Join e Calcolo Medie dt\_risultato\_12\_2 \textless-
+dt\_counts{[}gene \%in\% top100\_genes\_dt{]}{[}
+dt\_risultato\_12\_1\_dt, on = ``sample\_id'', nomatch = 0 {]}{[},
+.(mean\_count = mean(count, na.rm = TRUE)), by = .(cohort, condition,
+gene) {]} \}) time\_dt\_12\_2 \textless-
+extract\_time(time\_dt\_12\_2\_result) cat(``data.table T12.2 Time:'',
+time\_dt\_12\_2, ``seconds.\n'')
+
+\section{Aggiornamento tabella di performance Task
+12.2}\label{aggiornamento-tabella-di-performance-task-12.2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``T12.2 Join \& Cohort Means (Top
+100)'', \texttt{Time\_DataFrame\ (s)} = time\_df\_12\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_12\_2, \texttt{Time\_SQL\ (s)}
+= NA\_real\_) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_risultato\_12\_2, 5))
+
+\section{----------------------------------------------------}\label{section-66}
+
+\section{SALVATAGGIO RISULTATI TASK
+12}\label{salvataggio-risultati-task-12}
+
+\section{----------------------------------------------------}\label{section-67}
+
+fwrite(dt\_risultato\_12\_2, ``Task12\_CohortMeans\_Results.csv'')
+cat(``\nAnalisi Task 12 completata.\n'')
+
+Task Finale: Analisi Single-Cell
+
+Goal: Associare tipi cellulari ai cluster di integrazione, separando per
+tessuto Normale (N) e Tumore (T).
+
+cat(``\n--- INIZIO FINAL REVISION: ANALISI SINGLE-CELL ---\n'')
+
+\section{Dati per Task Finale}\label{dati-per-task-finale}
+
+dt\_clusters \textless- copy(dt\_clusters\_fr) dt\_celltypes \textless-
+copy(dt\_celltypes\_fr) df\_clusters \textless- copy(df\_clusters\_fr)
+df\_celltypes \textless- copy(df\_celltypes\_fr)
+
+\section{--- PULIZIA CHIAVE DI JOIN `cell'
+---}\label{pulizia-chiave-di-join-cell}
+
+cat(``Pulizia nomi cellule\ldots{}\n'') dt\_clusters{[}, cell :=
+trimws(as.character(cell)){]} dt\_celltypes{[}, cell :=
+trimws(as.character(cell)){]} dt\_clusters{[}, cell :=
+gsub(``\emph{{[}A-Z{]}}'', ``\,``, cell){]}
+
+df\_clusters\(cell <- trimws(as.character(df_clusters\)cell))
+df\_celltypes\(cell <- trimws(as.character(df_celltypes\)cell))
+df\_clusters\(cell <- gsub("_[A-Z]_", "", df_clusters\)cell)
+
+\section{Controllo}\label{controllo}
+
+common\_cells \textless-
+length(intersect(dt\_clusters\(cell, dt_celltypes\)cell)) cat(``DEBUG:
+Trovate'', common\_cells, ``cellule comuni.\n'')
+
+\section{----------------------------------------------------}\label{section-68}
+
+\section{FR-TASK 1: Combinare Tipi Cellulari e
+Cluster}\label{fr-task-1-combinare-tipi-cellulari-e-cluster}
+
+\section{----------------------------------------------------}\label{section-69}
+
+cat(``\nRunning FR-Task 1: Combine Cell Types and Clusters\ldots{}\n'')
+
+\section{--- 1.1: Data.frame / Dplyr (inner\_join)
+---}\label{data.frame-dplyr-inner_join}
+
+time\_df\_fr\_1\_result \textless- system.time(\{ df\_master\_table
+\textless- df\_clusters \%\textgreater\% inner\_join(df\_celltypes, by =
+``cell'') \}) time\_df\_fr\_1 \textless-
+extract\_time(time\_df\_fr\_1\_result) cat(``DataFrame FR-T1 Time
+(inner\_join):'', time\_df\_fr\_1, ``seconds.\n'')
+
+\section{--- 1.2: Data.table (Join) ---}\label{data.table-join}
+
+time\_dt\_fr\_1\_result \textless- system.time(\{ setkey(dt\_clusters,
+cell) setkey(dt\_celltypes, cell) dt\_master\_table \textless-
+dt\_clusters{[}dt\_celltypes, nomatch = 0{]} \}) time\_dt\_fr\_1
+\textless- extract\_time(time\_dt\_fr\_1\_result) cat(``data.table FR-T1
+Time (Keyed Join):'', time\_dt\_fr\_1, ``seconds.\n'')
+
+\section{--- 1.3: SQL (sqldf) ---}\label{sql-sqldf-10}
+
+time\_sql\_fr\_1\_result \textless- system.time(\{ sql\_master\_table
+\textless- sqldf::sqldf('' SELECT T1.*, T2.cell\_type, T2.sample\_type
+FROM df\_clusters AS T1 INNER JOIN df\_celltypes AS T2 ON T1.cell =
+T2.cell ``) \}) time\_sql\_fr\_1 \textless-
+extract\_time(time\_sql\_fr\_1\_result) cat(''SQL FR-T1 Time (INNER
+JOIN):``, time\_sql\_fr\_1,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance FR-Task
+1}\label{aggiornamento-tabella-di-performance-fr-task-1}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``FR-T1 Combine Tables'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_fr\_1,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_fr\_1, \texttt{Time\_SQL\ (s)}
+= time\_sql\_fr\_1) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_master\_table, 5))
+
+\section{----------------------------------------------------}\label{section-70}
+
+\section{FR-TASK 2: Conteggio Tipi Cellulari per Cluster
+(Totale)}\label{fr-task-2-conteggio-tipi-cellulari-per-cluster-totale}
+
+\section{----------------------------------------------------}\label{section-71}
+
+cat(``\nRunning FR-Task 2: Count Cell Types per Cluster
+(Total)\ldots{}\n'')
+
+\section{--- 2.1: Data.frame / Dplyr (count)
+---}\label{data.frame-dplyr-count}
+
+time\_df\_fr\_2\_result \textless- system.time(\{
+df\_counts\_per\_cluster \textless- df\_master\_table \%\textgreater\%
+count(integration\_cluster, cell\_type, name = ``count'') \})
+time\_df\_fr\_2 \textless- extract\_time(time\_df\_fr\_2\_result)
+cat(``DataFrame FR-T2 Time (count):'', time\_df\_fr\_2, ``seconds.\n'')
+
+\section{--- 2.2: Data.table (.N by) ---}\label{data.table-.n-by}
+
+time\_dt\_fr\_2\_result \textless- system.time(\{
+dt\_counts\_per\_cluster \textless- dt\_master\_table{[}, .N, by =
+.(integration\_cluster, cell\_type){]}
+setnames(dt\_counts\_per\_cluster, ``N'', ``count'') \}) time\_dt\_fr\_2
+\textless- extract\_time(time\_dt\_fr\_2\_result) cat(``data.table FR-T2
+Time (.N by):'', time\_dt\_fr\_2, ``seconds.\n'')
+
+\section{--- 2.3: SQL (sqldf) ---}\label{sql-sqldf-11}
+
+time\_sql\_fr\_2\_result \textless- system.time(\{
+sql\_counts\_per\_cluster \textless- sqldf::sqldf('' SELECT
+integration\_cluster, cell\_type, COUNT(*) AS count FROM
+sql\_master\_table GROUP BY integration\_cluster, cell\_type ``) \})
+time\_sql\_fr\_2 \textless- extract\_time(time\_sql\_fr\_2\_result)
+cat(''SQL FR-T2 Time (GROUP BY):``, time\_sql\_fr\_2,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance FR-Task
+2}\label{aggiornamento-tabella-di-performance-fr-task-2}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``FR-T2 Count per Cluster'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_fr\_2,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_fr\_2, \texttt{Time\_SQL\ (s)}
+= time\_sql\_fr\_2) ), use.names = TRUE, fill = TRUE )
+print(head(dt\_counts\_per\_cluster, 5))
+
+\section{----------------------------------------------------}\label{section-72}
+
+\section{FR-TASK 3 \& 5: Conteggio e Normalizzazione \% per Cluster e
+Tessuto}\label{fr-task-3-5-conteggio-e-normalizzazione-per-cluster-e-tessuto}
+
+\section{----------------------------------------------------}\label{section-73}
+
+cat(``\nRunning FR-Task 3 \& 5: Count \& Normalize \% by Cluster and
+Tissue\ldots{}\n'')
+
+\section{--- 3\&5.1: Data.frame / Dplyr ---}\label{data.frame-dplyr-17}
+
+time\_df\_fr\_3\_5\_result \textless- system.time(\{ df\_counts\_tissue
+\textless- df\_master\_table \%\textgreater\%
+count(integration\_cluster, cell\_type, sample\_type, name = ``count'')
+
+df\_normalized\_tissue \textless- df\_counts\_tissue \%\textgreater\%
+group\_by(integration\_cluster, sample\_type) \%\textgreater\% mutate(
+total\_in\_group = sum(count), percentage = (count / total\_in\_group) *
+100 ) \%\textgreater\% ungroup() \}) time\_df\_fr\_3\_5 \textless-
+extract\_time(time\_df\_fr\_3\_5\_result) cat(``DataFrame FR-T3/5 Time
+(count + mutate):'', time\_df\_fr\_3\_5, ``seconds.\n'')
+
+\section{--- 3\&5.2: Data.table ---}\label{data.table-12}
+
+time\_dt\_fr\_3\_5\_result \textless- system.time(\{ dt\_counts\_tissue
+\textless- dt\_master\_table{[}, .N, by = .(integration\_cluster,
+cell\_type, sample\_type){]} setnames(dt\_counts\_tissue, ``N'',
+``count'')
+
+dt\_counts\_tissue{[}, total\_in\_group := sum(count), by =
+.(integration\_cluster, sample\_type){]} dt\_counts\_tissue{[},
+percentage := (count / total\_in\_group) * 100{]}
+
+dt\_normalized\_tissue \textless- dt\_counts\_tissue \})
+time\_dt\_fr\_3\_5 \textless- extract\_time(time\_dt\_fr\_3\_5\_result)
+cat(``data.table FR-T3/5 Time (.N by + :=):'', time\_dt\_fr\_3\_5,
+``seconds.\n'')
+
+\section{--- 3\&5.3: SQL (sqldf) ---}\label{sql-sqldf-12}
+
+time\_sql\_fr\_3\_5\_result \textless- system.time(\{
+sql\_normalized\_tissue \textless- sqldf::sqldf('' WITH Counts AS (
+SELECT integration\_cluster, cell\_type, sample\_type, COUNT(\emph{) AS
+count FROM sql\_master\_table GROUP BY integration\_cluster, cell\_type,
+sample\_type ) SELECT }, (CAST(count AS REAL) / SUM(count) OVER
+(PARTITION BY integration\_cluster, sample\_type)) * 100 AS percentage
+FROM Counts ``) \}) time\_sql\_fr\_3\_5 \textless-
+extract\_time(time\_sql\_fr\_3\_5\_result) cat(''SQL FR-T3/5 Time
+(Window Function):``, time\_sql\_fr\_3\_5,''seconds.\n``)
+
+\section{Aggiornamento tabella di performance FR-Task
+3/5}\label{aggiornamento-tabella-di-performance-fr-task-35}
+
+performance\_comparison \textless- rbindlist( list(
+performance\_comparison, list(Task = ``FR-T3/5 Count \& Normalize'',
+\texttt{Time\_DataFrame\ (s)} = time\_df\_fr\_3\_5,
+\texttt{Time\_DataTable\ (s)} = time\_dt\_fr\_3\_5,
+\texttt{Time\_SQL\ (s)} = time\_sql\_fr\_3\_5) ), use.names = TRUE, fill
+= TRUE ) print(head(dt\_normalized\_tissue, 5))
+
+\section{----------------------------------------------------}\label{section-74}
+
+\section{SALVATAGGIO RISULTATI FINAL
+REVISION}\label{salvataggio-risultati-final-revision}
+
+\section{----------------------------------------------------}\label{section-75}
+
+if (exists(``dt\_master\_table'') \&\& nrow(dt\_master\_table)
+\textgreater{} 0) \{ fwrite(dt\_master\_table,
+``FinalTask\_MasterTable.csv'') fwrite(dt\_counts\_per\_cluster,
+``FinalTask\_CountsPerCluster.csv'') fwrite(dt\_normalized\_tissue,
+``FinalTask\_NormalizedCounts\_Tissue.csv'') \} else \{ cat(``RISULTATI
+FINAL REVISION VUOTI - NESSUN FILE SALVATO (JOIN FALLITO).\n'') \}
+
+cat(``\nAnalisi Final Revision completata.\n'')
+
+Risultati Finali della Performance
+
+Infine, stampiamo la tabella di performance cumulativa completa. Tutti i
+task sono stati eseguiti e i tempi sono stati allineati correttamente
+nelle loro colonne.
+
+cat(``--- TABELLA DI PERFORMANCE CUMULATIVA FINALE ---\n'')
+
+\section{Salvataggio finale del file CSV
+cumulativo}\label{salvataggio-finale-del-file-csv-cumulativo}
+
+fwrite(performance\_comparison,
+``risultati\_performance\_cumulative.csv'')
+
+\section{Stampa la tabella finale nel
+report}\label{stampa-la-tabella-finale-nel-report}
+
+print(performance\_comparison)
+
+cat(``\n*** ANALISI TOTALE COMPLETATA ***\n``)
+
+\end{document}

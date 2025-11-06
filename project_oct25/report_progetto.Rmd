@@ -1,0 +1,1959 @@
+---
+title: "Report_progetto"
+author: "Marta Paira"
+date: "2025-11-07"
+output:
+  html_document: default
+  pdf_document: default
+toc: true 
+toc_float: true 
+theme: united 
+code_folding: 'hide'
+---
+
+<style>
+/* Stile per rendere le tabelle di output più leggibili */
+.main-container { max-width: 1200px !important; }
+pre { max-height: 400px; overflow-y: auto; }
+.data.table { width: auto; }
+.rmd-task {
+  padding: 15px;
+  background-color: #f5f5f5;
+  border-left: 5px solid #007bff;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+</style>
+
+# Global Setup and Data Loading
+
+In this initial block, we load all necessary libraries, define helper functions, and load all CSV files into memory once.
+
+## 1. Global Options
+
+We use this setup block to define the global settings for all following R code chunks. The options `message=FALSE` and `warning=FALSE` are set to suppress loading messages and warnings, ensuring a clean and professional final report.
+
+```{r setup, include=FALSE}
+# This chunk sets options for the entire report
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, # Suppresses loading messages
+                      warning = FALSE, # Suppresses warnings
+                      fig.align = 'center') # Centers plots
+```
+
+
+## 2. Library Loading
+We load the required libraries.
+
+```{r}
+library(data.table)
+library(dplyr)
+library(lubridate)
+library(sqldf)
+library(tidyr) 
+library(ggplot2)
+library(scales)
+```
+
+## 3. Helper function to Extract Time (in seconds)
+We define the extract_time function. This function takes the complex output of system.time() and extracts only the "elapsed" time (in seconds), ready to be inserted into the performance table to compare the execution times of different approaches.
+```{r}
+extract_time <- function(time_obj) {
+  return(round(time_obj["elapsed"], 6))
+}
+```
+
+## 4. Data Loading
+In this section, we load all necessary CSV files for the analysis. To prepare for the performance comparison, each file is first read as a data.table and then copied as a conventional R data.frame.
+```{r}
+cat("Caricamento di tutti i 13 file di dati...\n")
+dt_counts <- fread("bulk_counts_long.csv")
+dt_metadata <- fread("sample_metadata.csv")
+dt_labs_t5 <- fread("clinical_labs.csv")
+dt_ranges_t5 <- fread("lab_reference_ranges.csv")
+dt_vitals_t6 <- fread("vitals_time_series.csv")
+dt_peaks_t7 <- fread("atac_peaks.bed.csv")
+dt_genes_t10 <- fread("gene_annotation.bed.csv")
+dt_variants_t11 <- fread("variants.csv")
+dt_counts_wide_t9 <- fread("bulk_counts_wide.csv")
+dt_cohortA <- fread("cohortA_samples.csv")
+dt_cohortB <- fread("cohortB_samples.csv")
+dt_clusters_fr <- fread("annotated_GSM3516673_normal_annotated_GSM3516672_tumor_SeuratIntegration.csv")
+dt_celltypes_fr <- fread("nt_combined_clustering.output.csv")
+cat("Data loaded.\n")
+```
+
+
+```{r}
+df_counts <- as.data.frame(dt_counts)
+df_metadata <- as.data.frame(dt_metadata)
+df_labs_t5 <- as.data.frame(dt_labs_t5)
+df_ranges_t5 <- as.data.frame(dt_ranges_t5)
+df_vitals_t6 <- as.data.frame(dt_vitals_t6)
+df_peaks_t7 <- as.data.frame(dt_peaks_t7)
+df_genes_t10 <- as.data.frame(dt_genes_t10)
+df_variants_t11 <- as.data.frame(dt_variants_t11)
+df_counts_wide_t9 <- as.data.frame(dt_counts_wide_t9)
+df_cohortA <- as.data.frame(dt_cohortA)
+df_cohortB <- as.data.frame(dt_cohortB)
+df_clusters_fr <- as.data.frame(dt_clusters_fr)
+df_celltypes_fr <- as.data.frame(dt_celltypes_fr)
+cat("data.frame copies created.\n")
+```
+
+## 5. Initialization of the Cumulative Performance Table 
+We define the main table with all possible columns for timing metrics.
+```{r}
+performance_comparison <- data.table(
+  Task = character(),
+  `Time_DataFrame (s)` = numeric(),
+  `Time_DataTable (s)` = numeric(),
+  `Time_SQL (s)` = numeric(),
+  `Time_DT_NoIndex (s)` = numeric(),
+  `Time_DT_Keyed/Index (s)` = numeric(),
+  `Time_DT_Rolling (s)` = numeric()
+)
+```
+
+## 6. Output Configuration
+This section initializes the `output_dir` variable and ensures the necessary `results/` subdirectory is created. All generated files, including performance metrics and final results, will be saved here to maintain a clean project structure.
+```{r}
+output_dir <- "results"
+if (!dir.exists(output_dir)) {
+    dir.create(output_dir, showWarnings = FALSE)
+}
+```
+
+<div class="rmd-task">
+# Task 1: Filter and Summarize
+**Goal: This task performs two common analysis operations: 1) filtering and summarizing, and 2) joining and summarizing. It benchmarks the performance of three different methods (dplyr, data.table, and sqldf) for each operation.**
+</div>
+
+## Data Preparation 
+First, we pre-join the count and metadata tables to create unified datasets.
+
+```{r}
+cat("\n--- START TASK 1: PERFORMANCE COMPARISON ---\n")
+# Pre-join data for filter task
+df_unita <- df_counts %>% left_join(df_metadata, by = "sample_id")
+dt_unita <- dt_counts[dt_metadata, on = "sample_id"] 
+```
+
+
+## Task 1.1: Filter and Summarize (Mean/Median)
+This sub-task filters the data to keep only treated samples and genes starting with GENE_00. It then groups by gene and calculates the mean and median counts for this specific subset.
+
+```{r}
+cat("\nRunning Task 1.1: Filter & Summarize...\n")
+
+# 1.1.1: Data.frame / Dplyr 
+time_df_1_1_result <- system.time({
+  df_risultato_1_1 <- df_unita %>% 
+    filter(grepl("^GENE_00", gene) & condition == "treated") %>% 
+    group_by(gene) %>% 
+    summarise(media_counts = mean(count), median_counts = median(count), .groups = 'drop')
+})
+time_df_1_1 <- extract_time(time_df_1_1_result)
+cat("DataFrame T1.1 Time:", time_df_1_1, "seconds.\n")
+
+# 1.1.2: Data.table
+time_dt_1_1_result <- system.time({
+  dt_risultato_1_1 <- dt_unita[ 
+    grepl("^GENE_00", gene) & condition == "treated", 
+    list(media_counts = mean(count), median_counts = median(count)),
+    by = gene 
+  ]
+})
+time_dt_1_1 <- extract_time(time_dt_1_1_result)
+cat("data.table T1.1 Time:", time_dt_1_1, "seconds.\n")
+
+# 1.1.3: SQL (sqldf)
+time_sql_1_1_result <- system.time({
+  sql_risultato_1_1 <- sqldf::sqldf("
+    SELECT T1.gene, AVG(T1.count) AS media_counts, MEDIAN(T1.count) AS median_counts
+    FROM df_counts AS T1  
+    LEFT JOIN df_metadata AS T2 ON T1.sample_id = T2.sample_id  
+    WHERE T2.condition = 'treated' AND T1.gene LIKE 'GENE_00%'
+    GROUP BY T1.gene
+  ")
+})
+time_sql_1_1 <- extract_time(time_sql_1_1_result)
+cat("SQL T1.1 Time:", time_sql_1_1, "seconds.\n")
+
+# Update comparison table after Task 1.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T1.1 Filter & Summarize", 
+         `Time_DataFrame (s)` = time_df_1_1, 
+         `Time_DataTable (s)` = time_dt_1_1, 
+         `Time_SQL (s)` = time_sql_1_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(df_risultato_1_1, 5))
+```
+
+
+## Task 1.2: Join Metadata and Summarize by Condition
+This sub-task joins the complete count data with the sample metadata. It then groups by both gene and condition to calculate the mean count for every gene in both the 'treated' and 'control' groups.
+
+```{r}
+cat("\nRunning Task 1.2: Join & Summarize...\n")
+
+# 1.2.1: Data.frame / Dplyr
+time_df_1_2_result <- system.time({
+  df_risultato_1_2 <- df_counts %>%
+    left_join(df_metadata, by = "sample_id") %>%
+    group_by(gene, condition) %>%
+    summarise(media_counts = mean(count), .groups = 'drop')
+})
+time_df_1_2 <- extract_time(time_df_1_2_result)
+cat("DataFrame T1.2 Time:", time_df_1_2, "seconds.\n")
+
+# 1.2.2: Data.table
+time_dt_1_2_result <- system.time({
+  dt_risultato_1_2 <- dt_counts[dt_metadata, on = "sample_id"][,
+                                      list(media_counts = mean(count)),
+                                      by = list(gene, condition)
+  ]
+})
+time_dt_1_2 <- extract_time(time_dt_1_2_result)
+cat("data.table T1.2 Time:", time_dt_1_2, "seconds.\n")
+
+# 1.2.3: SQL (sqldf)
+time_sql_1_2_result <- system.time({
+  sql_risultato_1_2 <- sqldf::sqldf("
+    SELECT T1.gene, T2.condition, AVG(T1.count) AS media_counts
+    FROM df_counts AS T1
+    LEFT JOIN df_metadata AS T2 ON T1.sample_id = T2.sample_id
+    GROUP BY T1.gene, T2.condition
+  ")
+})
+time_sql_1_2 <- extract_time(time_sql_1_2_result)
+cat("SQL T1.2 Time:", time_sql_1_2, "seconds.\n")
+
+# Update comparison table after Task 1.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T1.2 Join & Summarize", 
+         `Time_DataFrame (s)` = time_df_1_2, 
+         `Time_DataTable (s)` = time_dt_1_2, 
+         `Time_SQL (s)` = time_sql_1_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(df_risultato_1_2, 5))
+```
+
+```{r}
+# SAVE TASK 1 RESULTS
+fwrite(dt_risultato_1_1, file.path(output_dir, "Task1_FilterSummarize_Results.csv")) 
+fwrite(dt_risultato_1_2, file.path(output_dir, "Task1_JoinSummarize_Results.csv"))
+cat("\nTask 1 Analysis completed.\n")
+```
+
+
+<div class="rmd-task">
+
+# Task 2: QC-Style Derived Columns
+
+**Goal: This task benchmarks adding new columns "in-place", a key efficiency feature. We first add a log2_counts column and a simple binary flag (high > 100), then overwrite the high flag using a more complex gene-specific median threshold.**
+
+</div>
+
+## Data Preparation 
+We create fresh copies of the counts data for each of the three methods (dplyr, data.table, Base R) to ensure a fair benchmark, as data.table will modify its data "in-place".
+
+```{r}
+cat("\n--- START TASK 2: QC DERIVED COLUMNS ---\n")
+# Create clean copies of the data
+dt_counts_t2 <- copy(dt_counts)
+df_counts_t2 <- copy(df_counts)
+df_counts_t2_baseR <- copy(df_counts) 
+```
+
+
+## Task 2.1: Add log2_counts and Fixed Flag
+This sub-task adds two new columns: a standard log2(count + 1) transformation and a simple binary flag for any count greater than 100.
+
+```{r}
+cat("\nRunning Task 2.1: Log2 & Fixed Flag (3-way comparison)...\n")
+
+# --- 2.1.1: Data.frame / Dplyr ---
+time_df_2_1_result <- system.time({
+  df_counts_t2_result <- df_counts_t2 %>%
+    mutate(log2_counts = log2(count + 1),
+           high = ifelse(count > 100, 1, 0))
+})
+time_df_2_1 <- extract_time(time_df_2_1_result)
+cat("DataFrame T2.1 Time:", time_df_2_1, "seconds.\n")
+
+# --- 2.1.2: Data.table ---
+time_dt_2_1_result <- system.time({
+  dt_counts_t2[, log2_counts := log2(count + 1)]
+  dt_counts_t2[, high := ifelse(count > 100, 1, 0)]
+})
+time_dt_2_1 <- extract_time(time_dt_2_1_result)
+cat("data.table T2.1 Time:", time_dt_2_1, "seconds.\n")
+
+# Update performance table Task 2.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T2.1 Log2 & Fixed Flag", 
+         `Time_DataFrame (s)` = time_df_2_1, 
+         `Time_DataTable (s)` = time_dt_2_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_counts_t2, 5))
+```
+
+
+## Task 2.2: Overwrite Flag using Gene-wise Threshold
+
+This sub-task overwrites the high column created in T2.1. It uses a more complex, dynamic threshold, flagging counts only if they are greater than the median count for that specific gene.
+
+```{r}
+cat("\nRunning Task 2.2: Overwrite Flag by Gene (3-way comparison)...\n")
+
+# --- 2.2.1: Data.frame / Dplyr ---
+time_df_2_2_result <- system.time({
+  df_risultato_2_2 <- df_counts_t2 %>%
+    group_by(gene) %>%
+    mutate(high = ifelse(count > median(count), 1, 0)) %>%
+    ungroup()
+})
+time_df_2_2 <- extract_time(time_df_2_2_result)
+cat("DataFrame T2.2 Time:", time_df_2_2, "seconds.\n")
+
+# --- 2.2.2: Data.table ---
+time_dt_2_2_result <- system.time({
+  dt_counts_t2[, high := ifelse(count > median(count), 1, 0), by = gene]
+})
+time_dt_2_2 <- extract_time(time_dt_2_2_result)
+cat("data.table T2.2 Time:", time_dt_2_2, "seconds.\n")
+
+# Update performance table Task 2.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T2.2 Overwrite Flag by Gene", 
+         `Time_DataFrame (s)` = time_df_2_2, 
+         `Time_DataTable (s)` = time_dt_2_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+
+# Save the final result
+dt_risultato_2 <- dt_counts_t2
+print(head(dt_risultato_2, 5))
+```
+
+```{r}
+
+# SAVE TASK 2 RESULTS
+
+fwrite(dt_risultato_2, file.path(output_dir, "Task2_DerivedColumns_Results.csv"))
+cat("\nTask 2 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Task 3: Speed Up Joins & Lookups
+**Goal: This task demonstrates data.table's advanced optimization features. It benchmarks how using setkey() (pre-sorting a table) speeds up joins, and how setindex() (creating a data "map") speeds up filtering lookups.**
+</div>
+
+## Data Preparation 
+We reload clean copies of the counts and metadata to ensure a fair benchmark that isn't affected by previous operations.
+
+```{r}
+cat("\n--- START TASK 3: SPEED UP JOINS/LOOKUPS ---\n")
+# Reload clean data
+dt_counts_t3 <- copy(dt_counts)
+dt_metadata_t3 <- copy(dt_metadata)
+df_counts_t3 <- copy(df_counts)
+df_metadata_t3 <- copy(df_metadata)
+```
+
+## Task 3.1: Equi-Join with setkey()
+This sub-task compares a standard dplyr::left_join against an optimized data.table join that uses setkey(). setkey() pre-sorts the smaller metadata table, allowing data.table to use a much faster "binary search" algorithm for the join instead of a full table scan.
+
+```{r}
+cat("\nRunning Task 3.1: Equi-Join Comparison...\n")
+
+# --- 3.1.1: Data.frame / Dplyr (Join Standard) ---
+time_df_3_1_result <- system.time({
+  df_risultato_3_1 <- df_counts_t3 %>%
+    left_join(df_metadata_t3, by = "sample_id")
+})
+time_df_3_1 <- extract_time(time_df_3_1_result)
+cat("DataFrame T3.1 Time:", time_df_3_1, "seconds.\n")
+
+# --- 3.1.2: Data.table (Join con setkey()) ---
+setkey(dt_metadata_t3, sample_id) # Set the key on the smaller table
+time_dt_key_3_1_result <- system.time({
+   # Join using optimized x[i, on=...] syntax
+  dt_risultato_3_1_key <- dt_counts_t3[dt_metadata_t3, on = "sample_id"]
+})
+time_dt_key_3_1 <- extract_time(time_dt_key_3_1_result)
+cat("data.table T3.1 (Keyed) Time:", time_dt_key_3_1, "seconds.\n")
+
+# Update performance table Task 3.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T3.1 Equi-Join (Keyed)", 
+         `Time_DataFrame (s)` = time_df_3_1, 
+         `Time_DT_Keyed/Index (s)` = time_dt_key_3_1)),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_3_1_key, 5))
+```
+
+## Task 3.2: Secondary Index and Subset (Lookups)
+This sub-task benchmarks data.table's setindex() function. We measure the time to find a specific set of records before an index is created (forcing a "full table scan") and after the index is created (allowing an "instant lookup").
+
+```{r}
+cat("\nRunning Task 3.2: Secondary Index and Lookup...\n")
+
+# Setup targets for the lookup
+gene_subset <- dt_counts_t3[1:10, gene] # Get 10 random genes
+sample_target <- "S01" 
+
+# Measure lookup WITHOUT Index 
+time_no_index_3_2_result <- system.time({
+  dt_lookup_no_index <- dt_counts_t3[gene %in% gene_subset & sample_id == sample_target]
+})
+time_dt_no_index <- extract_time(time_no_index_3_2_result) 
+cat("data.table T3.2 (No Index) Time:", time_dt_no_index, "seconds.\n")
+
+# Add the secondary index 
+setindex(dt_counts_t3, gene, sample_id)
+
+# Measure lookup WITH Index 
+time_with_index_3_2_result <- system.time({
+  dt_lookup_with_index <- dt_counts_t3[gene %in% gene_subset & sample_id == sample_target]
+})
+time_dt_with_index <- extract_time(time_with_index_3_2_result)
+cat("data.table T3.2 (With Index) Time:", time_dt_with_index, "seconds.\n")
+
+# Update performance table Task 3.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T3.2 Lookup (Index vs No-Index)", 
+         `Time_DT_NoIndex (s)` = time_dt_no_index, 
+         `Time_DT_Keyed/Index (s)` = time_dt_with_index)),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_lookup_with_index, 5))
+```
+
+```{r}
+# SAVE TASK 3 RESULTS
+fwrite(dt_risultato_3_1_key, file.path(output_dir, "Task3_JoinResults_Complete.csv"))
+cat("\nTask 3 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Task 4: Annotate Counts and Find Top Genes
+**Goal: This task involves two different aggregations. First (4.1), we join the metadata to compute the total counts for each patient_id. Second (4.2), we find the top 10 genes with the highest mean count within each condition.**
+
+</div>
+
+## Data Preparation 
+We reload clean copies of the counts and metadata to ensure a fair, independent benchmark for this task's joins and aggregations.
+
+```{r}
+cat("\n--- START TASK 4: ANNOTATION AND TOP GENES ---\n")
+# Reload clean data 
+dt_counts_t4 <- copy(dt_counts)
+dt_metadata_t4 <- copy(dt_metadata)
+df_counts_t4 <- copy(df_counts) 
+df_metadata_t4 <- copy(df_metadata)
+```
+
+## Task 4.1: Join and Calculate Total Counts per Patient
+This sub-task joins the count data with the metadata to link samples to patients. It then calculates the sum of all counts for each patient.
+
+```{r}
+cat("\nRunning Task 4.1: Total Counts per Patient (3-way comparison)...\n")
+
+# --- 4.1.1: Data.frame / Dplyr ---
+time_df_4_1_result <- system.time({
+  df_risultato_4_1 <- df_counts_t4 %>%
+    # Join to get the patient_id
+    left_join(df_metadata_t4, by = "sample_id") %>%
+    # Calculate the total sum of counts for each patient
+    group_by(patient_id) %>%
+    summarise(total_counts = sum(count), 
+              .groups = 'drop')
+})
+time_df_4_1 <- extract_time(time_df_4_1_result)
+cat("DataFrame T4.1 Time:", time_df_4_1, "seconds.\n")
+
+# --- 4.1.2: Data.table ---
+time_dt_4_1_result <- system.time({
+  # Join and sum in a single data.table chain
+  dt_risultato_4_1 <- dt_counts_t4[dt_metadata_t4, on = "sample_id"][,
+                                      list(total_counts = sum(count)),
+                                      by = patient_id 
+  ]
+})
+time_dt_4_1 <- extract_time(time_dt_4_1_result)
+cat("data.table T4.1 Time:", time_dt_4_1, "seconds.\n")
+
+# --- 4.1.3: SQL (sqldf) ---
+time_sql_4_1_result <- system.time({
+  sql_risultato_4_1 <- sqldf::sqldf("
+    SELECT T2.patient_id, SUM(T1.count) AS total_counts
+    FROM df_counts_t4 AS T1
+    LEFT JOIN df_metadata_t4 AS T2 ON T1.sample_id = T2.sample_id
+    GROUP BY T2.patient_id
+  ")
+})
+time_sql_4_1 <- extract_time(time_sql_4_1_result)
+cat("SQL T4.1 Time:", time_sql_4_1, "seconds.\n")
+
+# Update performance table Task 4.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T4.1 Total Counts per Patient", 
+         `Time_DataFrame (s)` = time_df_4_1, 
+         `Time_DataTable (s)` = time_dt_4_1, 
+         `Time_SQL (s)` = time_sql_4_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(df_risultato_4_1, 5))
+```
+
+## Task 4.2: Find Top 10 Genes by Mean Count per Condition
+This is a more complex "Top N per Group" analysis. We find the mean count for each gene within each condition, then rank these means to find the top 10 highest-expressing genes for both 'treated' and 'control'.
+
+```{r}
+cat("\nRunning Task 4.2: Top 10 Genes by Condition...\n")
+
+# --- 4.2.1: Data.frame / Dplyr ---
+time_df_4_2_result <- system.time({
+  df_risultato_4_2 <- df_counts_t4 %>%
+    left_join(df_metadata_t4, by = "sample_id") %>%
+    # 1. Calculate the mean per (gene, condition)
+    group_by(gene, condition) %>%
+    summarise(mean_count = mean(count), .groups = 'drop_last') %>%
+    # 2. Order by condition, then by count descending
+    arrange(condition, desc(mean_count)) %>%
+    # 3. Take only the first 10 for each condition group
+    slice_head(n = 10) %>%
+    ungroup()
+})
+time_df_4_2 <- extract_time(time_df_4_2_result)
+cat("DataFrame T4.2 Time:", time_df_4_2, "seconds.\n")
+
+# --- 4.2.2: Data.table ---
+time_dt_4_2_result <- system.time({
+  dt_ranked <- dt_counts_t4[dt_metadata_t4, on = "sample_id"][,
+                                    list(mean_count = mean(count)),
+                                    by = list(gene, condition)
+  ]
+  dt_risultato_4_2 <- dt_ranked[
+    , rank := rank(-mean_count, ties.method = "min"), 
+    by = condition
+  ][
+    rank <= 10
+  ]
+})
+time_dt_4_2 <- extract_time(time_dt_4_2_result)
+cat("data.table T4.2 Time:", time_dt_4_2, "seconds.\n")
+
+# --- 4.2.3: SQL (sqldf) ---
+time_sql_4_2_result <- system.time({
+  sql_risultato_4_2 <- sqldf::sqldf("
+    WITH RankedGenes AS (
+        SELECT 
+          T1.gene, 
+          T2.condition, 
+          AVG(T1.count) AS mean_count,
+          RANK() OVER (PARTITION BY T2.condition ORDER BY AVG(T1.count) DESC) as rn
+        FROM df_counts_t4 AS T1
+        LEFT JOIN df_metadata_t4 AS T2 ON T1.sample_id = T2.sample_id
+        GROUP BY T1.gene, T2.condition
+    )
+    SELECT gene, condition, mean_count 
+    FROM RankedGenes
+    WHERE rn <= 10;
+  ")
+})
+time_sql_4_2 <- extract_time(time_sql_4_2_result)
+cat("SQL T4.2 Time:", time_sql_4_2, "seconds.\n")
+
+# Update performance table Task 4.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T4.2 Top 10 Genes by Condition", 
+         `Time_DataFrame (s)` = time_df_4_2, 
+         `Time_DataTable (s)` = time_dt_4_2, 
+         `Time_SQL (s)` = time_sql_4_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_4_2, 10)) # Stampiamo i primi 10
+```
+
+```{r}
+# SAVE TASK 4 RESULTS
+fwrite(dt_risultato_4_2, file.path(output_dir, "Task4_Top10GenesByCondition_Results.csv"))
+cat("\nTask 4 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Task 5: Non-Equi Join (Reference Range Classification)
+**Goal: This task benchmarks a "non-equi join" (a join based on intervals, not just equality). We label lab results (clinical_labs.csv) as "Normal" or "Out_of_Range" by joining them against a table of reference ranges (lab_reference_ranges.csv) where value >= lower and value <= upper.**
+
+</div>
+
+## Data Preparation 
+We load clean copies of the clinical labs and reference range data. We also defensively rename the lab column to lab_name in both tables to ensure the join keys match.
+
+```{r}
+cat("\n--- START TASK 5: CLINICAL NON-EQUI JOIN ---\n")
+
+# Load data for Task 5
+dt_labs_t5_local <- copy(dt_labs_t5)
+dt_ranges_t5_local <- copy(dt_ranges_t5)
+
+# Standardize column names to 'lab_name' for a reliable join
+setnames(dt_labs_t5_local, old = "lab", new = "lab_name", skip_absent = TRUE)
+setnames(dt_ranges_t5_local, old = "lab", new = "lab_name", skip_absent = TRUE)
+
+# Create data.frame copies
+df_labs_t5_local <- as.data.frame(dt_labs_t5_local)
+df_ranges_t5_local <- as.data.frame(dt_ranges_t5_local)
+```
+
+## Task 5.1: Non-Equi Join and Labeling
+This sub-task compares three methods for labeling the lab data. Dplyr and SQL perform a full LEFT JOIN and label all rows, while data.table performs the specific non-equi join requested, which is faster but only finds the "Normal" rows. 
+```{r}
+cat("\nRunning Task 5.1: Non-Equi Join and Labeling...\n")
+
+# --- 5.1.1: Data.frame / Dplyr ---
+time_df_5_1_result <- system.time({
+  df_joined_t5 <- df_labs_t5_local %>%
+    left_join(df_ranges_t5_local, by = "lab_name", relationship = "many-to-many") %>%
+    mutate(is_normal = (value >= lower & value <= upper),
+           status = ifelse(is.na(lower), "No_Reference", 
+                           ifelse(is_normal, "Normal", "Out_of_Range"))) %>%
+    select(patient_id, lab_name, value, status) 
+})
+time_df_5_1 <- extract_time(time_df_5_1_result)
+cat("DataFrame T5.1 Time:", time_df_5_1, "seconds.\n")
+
+# --- 5.1.2: Data.table (Non-Equi Join) ---
+time_dt_5_1_result <- system.time({
+  setkey(dt_labs_t5_local, lab_name)
+  setkey(dt_ranges_t5_local, lab_name)
+  dt_risultato_5_1 <- dt_labs_t5_local[dt_ranges_t5_local, 
+                                 on = .(lab_name, value >= lower, value <= upper),
+                                 nomatch = 0
+  ][,
+    .(patient_id, lab_name, value, status = "Normal")
+  ]
+})
+time_dt_5_1 <- extract_time(time_dt_5_1_result)
+cat("data.table T5.1 Time (Non-Equi Join):", time_dt_5_1, "seconds.\n")
+
+# --- 5.1.3: SQL (sqldf) ---
+time_sql_5_1_result <- system.time({
+  sql_risultato_5_1 <- sqldf::sqldf("
+    SELECT T1.patient_id, T1.lab_name, T1.value, 
+           CASE 
+               WHEN T2.lower IS NULL THEN 'No_Reference'
+               WHEN T1.value >= T2.lower AND T1.value <= T2.upper THEN 'Normal'
+               ELSE 'Out_of_Range'
+           END AS status
+    FROM df_labs_t5_local AS T1
+    LEFT JOIN df_ranges_t5_local AS T2 ON T1.lab_name = T2.lab_name
+  ")
+})
+time_sql_5_1 <- extract_time(time_sql_5_1_result)
+cat("SQL T5.1 Time:", time_sql_5_1, "seconds.\n")
+
+# Update performance table Task 5.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T5.1 Non-Equi Join Label", 
+         `Time_DataFrame (s)` = time_df_5_1, 
+         `Time_DataTable (s)` = time_dt_5_1, 
+         `Time_SQL (s)` = time_sql_5_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(df_joined_t5, 5))
+```
+
+## Task 5.2: Summarize Abnormal Rates
+This sub-task calculates the total and abnormal test rates for each patient/lab combination.
+Note: Because the data.table T5.1 result was incomplete (missing "Out_of_Range" rows), we use the complete result from the SQL query (T5.1.3) as the starting point for all three benchmarks in this step to ensure a fair comparison.
+```{r}
+cat("\nRunning Task 5.2: Summarize Abnormal Rates...\n")
+
+# WORKAROUND: Use the complete SQL result as the base for a fair T5.2 benchmark
+dt_final_t5_base <- as.data.table(sql_risultato_5_1) 
+df_final_t5_base_df <- as.data.frame(dt_final_t5_base)
+
+# --- 5.2.1: Data.frame / Dplyr ---
+time_df_5_2_result <- system.time({
+  df_risultato_5_2 <- df_final_t5_base_df %>%
+    group_by(patient_id, lab_name) %>%
+    summarise(
+      TotalTests = n(),
+      AbnormalTests = sum(status == "Out_of_Range"),
+      AbnormalRate = AbnormalTests / TotalTests,
+      .groups = 'drop'
+    )
+})
+time_df_5_2 <- extract_time(time_df_5_2_result)
+cat("DataFrame T5.2 Time:", time_df_5_2, "seconds.\n")
+
+# --- 5.2.2: Data.table ---
+time_dt_5_2_result <- system.time({
+  dt_risultato_5_2 <- dt_final_t5_base[,
+                                    list(
+                                      TotalTests = .N,
+                                      AbnormalTests = sum(status == "Out_of_Range"),
+                                      AbnormalRate = sum(status == "Out_of_Range") / .N
+                                    ),
+                                    by = list(patient_id, lab_name)
+  ]
+})
+time_dt_5_2 <- extract_time(time_dt_5_2_result)
+cat("data.table T5.2 Time:", time_dt_5_2, "seconds.\n")
+
+# --- 5.2.3: SQL (sqldf) ---
+time_sql_5_2_result <- system.time({
+  sql_risultato_5_2 <- sqldf::sqldf("
+    SELECT patient_id, lab_name, 
+           COUNT(*) AS TotalTests,
+           SUM(CASE WHEN status = 'Out_of_Range' THEN 1 ELSE 0 END) AS AbnormalTests,
+           CAST(SUM(CASE WHEN status = 'Out_of_Range' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS AbnormalRate
+    FROM dt_final_t5_base -- Usiamo la tabella base creata
+    GROUP BY patient_id, lab_name
+  ")
+})
+time_sql_5_2 <- extract_time(time_sql_5_2_result)
+cat("SQL T5.2 Time:", time_sql_5_2, "seconds.\n")
+
+# Update performance table Task 5.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison, 
+    list(Task = "T5.2 Summarize Abnormal Rates", 
+         `Time_DataFrame (s)` = time_df_5_2, 
+         `Time_DataTable (s)` = time_dt_5_2, 
+         `Time_SQL (s)` = time_sql_5_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(df_risultato_5_2, 5))
+```
+
+```{r}
+# SAVE TASK 5 RESULTS
+fwrite(dt_risultato_5_2, file.path(output_dir, "Task5_AbnormalRates_Results.csv"))
+cat("\nAnalisi Task 5 completata.\n")
+```
+
+<div class="rmd-task">
+
+# Task 6: Nearest-Time Matching (Rolling Join)
+**Goal: This task matches time-series data. It uses data.table's roll = TRUE feature (a 'rolling join') to find the nearest vital sign measurement for each lab draw. It calculates the time lag (T6.1) and correlates CRP values with the nearest vital signs (T6.2).**
+</div>
+
+## Data Preparation 
+First, we load the vitals_time_series.csv data. We then prepare both the labs and vitals tables by converting their time columns from text to proper datetime objects using lubridate::ymd_hms.
+
+```{r}
+cat("\n--- START TASK 6: NEAREST-TIME ROLLING JOIN & CORRELATION ---\n")
+# Load data for Task 6
+dt_labs_t6 <- copy(dt_labs_t5) 
+dt_vitals_t6_local <- copy(dt_vitals_t6)
+
+# TEMPORAL DATA PREPARATION
+# 1. Convert text to datetime objects
+setnames(dt_labs_t6, "lab", "lab_name", skip_absent = TRUE)
+dt_labs_t6[, time_iso := ymd_hms(as.character(time_iso), tz = "UTC")]
+dt_vitals_t6_local[, time_iso := ymd_hms(as.character(time_iso), tz = "UTC")]
+ 
+# 2. PIVOT: Transform vitals from 'long' to 'wide'
+dt_vitals_t6_wide <- dcast(dt_vitals_t6_local, patient_id + time_iso ~ vital, value.var = "value", fun.aggregate = mean, na.rm = TRUE)
+  
+# 3. Order the data (MANDATORY for a rolling join to work)
+setorder(dt_vitals_t6_wide, patient_id, time_iso)
+
+```
+
+## Task 6.1: Optimized Rolling Join & Lag Calculation
+This sub-task performs the core rolling join. It takes the lab draw times and 'rolls' them back to find the last available vital sign time. It then calculates the time difference in minutes (lag_minutes).
+
+```{r}
+cat("\nRunning Task 6.1: Rolling Join\n")
+
+# Rename the 'time_iso' column in 'x' (vitals) BEFORE the join
+# This is necessary to preserve both the vitals_time and the lab_time
+setnames(dt_vitals_t6_wide, "time_iso", "vitals_time", skip_absent = TRUE)
+
+time_dt_rolling_6_1_result <- system.time({
+  # Save 'vitals_time' in a copy, because the rolling join will overwrite it
+  dt_vitals_t6_wide[, vitals_time_matched := vitals_time]
+  # Perform the Join (x[i, on=...])
+   # on = .(col_x = col_i)
+  dt_join_result <- dt_vitals_t6_wide[dt_labs_t6, 
+                                    on = .(patient_id, vitals_time = time_iso), 
+                                    roll = TRUE, mult = "last"]
+  # Rename TIME columns after join
+  # 'vitals_time' (the key) now holds the lab_time.
+  # 'vitals_time_matched' (the copy) holds the original vitals_time.o
+  setnames(dt_join_result, 
+           old = c("vitals_time", "vitals_time_matched"), 
+           new = c("lab_time", "vitals_time"), 
+           skip_absent = TRUE)
+  # Calculate the lag
+  if ("lab_time" %in% names(dt_join_result) && "vitals_time" %in% names(dt_join_result)) {
+    dt_join_result[, lag_minutes := as.numeric(difftime(lab_time, vitals_time, units = "mins"))]
+  } else { 
+    dt_join_result[, lag_minutes := NA_real_] 
+  }
+  # Rename final columns
+  value_col_name <- if ("value" %in% names(dt_join_result)) "value" else "i.value"
+  lab_col_name <- if ("lab_name" %in% names(dt_join_result)) "lab_name" else "i.lab_name"
+  setnames(dt_join_result, old = c("HR", "SBP", value_col_name, lab_col_name), 
+           new = c("nearest_hr", "nearest_sbp", "lab_value", "lab_name"), skip_absent=TRUE)
+  
+  dt_risultato_6_1 <- dt_join_result
+})
+
+time_dt_rolling_6_1 <- extract_time(time_dt_rolling_6_1_result)
+cat("data.table T6.1 Time (Rolling Join):", time_dt_rolling_6_1, "seconds.\n")
+print(head(dt_risultato_6_1, 5))
+
+# Update performance table Task 6.1 
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T6.1 Rolling Join", 
+         `Time_DT_Rolling (s)` = time_dt_rolling_6_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+```
+
+## Task 6.2: Summarize CRP vs. Vitals Correlation
+This sub-task filters for 'CRP' labs and correlates the lab values against the nearest Heart Rate (HR) and Systolic Blood Pressure (SBP) found in T6.1, grouped by each patient.
+
+```{r}
+cat("\nRunning Task 6.2: Summarize Correlation...\n")
+
+# Filter for rows where we have vitals and the lab is "CRP"
+dt_cor_base <- dt_risultato_6_1[!is.na(nearest_hr) & !is.na(nearest_sbp) & lab_name == "CRP" & !is.na(lab_value)]
+df_cor_base <- as.data.frame(dt_cor_base)
+
+# --- 6.2.1: Data.frame / Dplyr ---
+time_df_6_2_result <- system.time({
+  if (nrow(df_cor_base) > 0) {
+    valid_patients_df <- df_cor_base %>% count(patient_id) %>% filter(n >= 2) %>% pull(patient_id)
+    if (length(valid_patients_df) > 0) {
+      df_risultato_6_2 <- df_cor_base %>%
+        filter(patient_id %in% valid_patients_df) %>%
+        group_by(patient_id) %>%
+        summarise(
+          cor_CRP_HR = cor(lab_value, nearest_hr, use = "pairwise.complete.obs"),
+          cor_CRP_SBP = cor(lab_value, nearest_sbp, use = "pairwise.complete.obs"),
+          .groups = 'drop'
+        )
+    } else { df_risultato_6_2 <- data.frame() }
+  } else { df_risultato_6_2 <- data.frame() }
+})
+time_df_6_2 <- extract_time(time_df_6_2_result)
+cat("DataFrame T6.2 Time:", time_df_6_2, "seconds.\n")
+
+# --- 6.2.2: Data.table ---
+time_dt_6_2_result <- system.time({
+  if (nrow(dt_cor_base) > 0) {
+    dt_risultato_6_2 <- dt_cor_base[, .N, by = patient_id][N >= 2][dt_cor_base, on = "patient_id"][,
+                                      .(cor_CRP_HR = cor(lab_value, nearest_hr, use = "pairwise.complete.obs"),
+                                        cor_CRP_SBP = cor(lab_value, nearest_sbp, use = "pairwise.complete.obs")),
+                                      by = patient_id
+    ]
+  } else { dt_risultato_6_2 <- data.table() }
+})
+time_dt_6_2 <- extract_time(time_dt_6_2_result)
+cat("data.table T6.2 Time:", time_dt_6_2, "seconds.\n")
+
+# Update performance table Task 6.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T6.2 Summarize Correlation", 
+         `Time_DataFrame (s)` = time_df_6_2, 
+         `Time_DataTable (s)` = time_dt_6_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_6_2, 5))
+```
+
+```{r}
+# SAVE TASK 6 RESULTS
+fwrite(dt_risultato_6_1, file.path(output_dir, "Task6_RollingJoinResults_Complete.csv"))
+fwrite(dt_risultato_6_2, file.path(output_dir, "Task6_CorrelationResults_Complete.csv"))
+cat("\nTask 6 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Task 7: Efficient Genomic Window Filtering (ATAC-seq)
+**Goal: This task benchmarks efficient filtering of genomic data. We first filter a large BED file (atac_peaks.bed.csv) for a specific genomic region (T7.1), and then find the Top 50 peaks in that region based on their score (T7.2).**
+
+</div>
+
+## Data Preparation 
+We create local copies of the ATAC-seq peak data and define the genomic coordinates for our filter.
+
+```{r}
+cat("\n--- START TASK 7: GENOMIC ATAC-SEQ FILTERING ---\n")
+# Load data for Task 7
+dt_peaks_t7_local <- copy(dt_peaks_t7)
+df_peaks_t7_local <- copy(df_peaks_t7)
+
+# Define the filter limits as variables
+chr_target <- "chr2"
+start_min <- 2000000
+start_max <- 4000000
+```
+
+## Task 7.1: Filter by Genomic Region
+This sub-task benchmarks the core filtering operation: finding all peaks that fall on chr2 and have a start position between 2,000,000 and 4,000,000.
+
+```{r}
+cat("\nRunning Task 7.1: Filter by Genomic Region...\n")
+
+# --- 7.1.1: Data.frame / Dplyr ---
+time_df_7_1_result <- system.time({
+  df_filtered_t7 <- df_peaks_t7_local %>%
+    filter(chr == chr_target & start >= start_min & start <= start_max)
+})
+time_df_7_1 <- extract_time(time_df_7_1_result)
+cat("DataFrame T7.1 Time:", time_df_7_1, "seconds.\n")
+
+# --- 7.1.2: Data.table ---
+time_dt_7_1_result <- system.time({
+  dt_filtered_t7 <- dt_peaks_t7_local[chr == chr_target & start >= start_min & start <= start_max]
+})
+time_dt_7_1 <- extract_time(time_dt_7_1_result)
+cat("data.table T7.1 Time:", time_dt_7_1, "seconds.\n")
+
+# Update performance table Task 7.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T7.1 Filter Genomic Region", 
+         `Time_DataFrame (s)` = time_df_7_1, 
+         `Time_DataTable (s)` = time_dt_7_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_filtered_t7, 5))
+```
+
+## Task 7.2: Find Top 50 Peaks by Score
+This sub-task benchmarks the sorting operation. It takes the filtered results from T7.1, orders them by the score column (descending), and selects the top 50.
+
+```{r}
+cat("\nRunning Task 7.2: Find Top 50 Peaks by Score...\n")
+
+# --- 7.2.1: Data.frame / Dplyr ---
+time_df_7_2_result <- system.time({
+  df_top50_t7 <- df_filtered_t7 %>%
+    arrange(desc(score)) %>%
+    slice_head(n = 50)
+})
+time_df_7_2 <- extract_time(time_df_7_2_result)
+cat("DataFrame T7.2 Time:", time_df_7_2, "seconds.\n")
+
+# --- 7.2.2: Data.table ---
+dt_filtered_t7_copy <- copy(dt_filtered_t7) 
+time_dt_7_2_result <- system.time({
+  setorder(dt_filtered_t7_copy, -score) 
+  dt_top50_t7 <- head(dt_filtered_t7_copy, 50) 
+})
+time_dt_7_2 <- extract_time(time_dt_7_2_result)
+cat("data.table T7.2 Time (setorder):", time_dt_7_2, "seconds.\n")
+
+# Update performance table Task 7.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T7.2 Top 50 by Score", 
+         `Time_DataFrame (s)` = time_df_7_2, 
+         `Time_DataTable (s)` = time_dt_7_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_top50_t7, 5))
+```
+
+```{r}
+# SAVE TASK 7 RESULTS
+fwrite(dt_top50_t7, file.path(output_dir, "Task7_Top50Peaks_Results.csv"))
+cat("\nTask 7 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Task 8: Robust Statistics and Pivoting
+**Goal: This task performs a two-part analysis. First (8.1), it calculates robust summary statistics (mean, median, Q1, Q3) for each gene, grouped by condition. Second (8.2), it "pivots" the resulting table to compare the mean_count of the 'treated' group vs. the 'control' group, filtering for genes where mean_treated > mean_control.**
+
+</div>
+
+## Data Preparation 
+We create local copies of the counts and metadata tables. We then perform the initial join to create the input for the T8.1 benchmarks.
+
+```{r}
+cat("\n--- START TASK 8: ROBUST STATS AND FILTER ---\n")
+
+# Create local copies for Task 8
+dt_counts_t8 <- copy(dt_counts)
+dt_metadata_t8 <- copy(dt_metadata)
+df_counts_t8 <- copy(df_counts)
+df_metadata_t8 <- copy(df_metadata)
+
+# Prepare joined data (used as input for T8.1)
+df_joined_t8 <- df_counts_t8 %>% left_join(df_metadata_t8, by = "sample_id")
+dt_joined_t8 <- dt_counts_t8[dt_metadata_t8, on = "sample_id"]
+```
+
+## Task 8.1: Calculate Robust Statistics
+This sub-task benchmarks the grouped summarization. We group by both gene and condition and calculate four separate statistics (mean, median, Q1, and Q3).
+
+```{r}
+cat("\nRunning Task 8.1: Calculate Robust Stats...\n")
+
+# --- 8.1.1: Data.frame / Dplyr ---
+time_df_8_1_result <- system.time({
+  df_stats_t8 <- df_joined_t8 %>%
+    group_by(gene, condition) %>%
+    summarise(
+      mean_count = mean(count, na.rm=T),
+      median_count = median(count, na.rm=T),
+      Q1 = quantile(count, 0.25, na.rm=T),
+      Q3 = quantile(count, 0.75, na.rm=T),
+      .groups = 'drop'
+    )
+})
+time_df_8_1 <- extract_time(time_df_8_1_result)
+cat("DataFrame T8.1 Time:", time_df_8_1, "seconds.\n")
+
+# --- 8.1.2: Data.table ---
+time_dt_8_1_result <- system.time({
+  dt_stats_t8 <- dt_joined_t8[,
+                               list(
+                                 mean_count = mean(count, na.rm=T),
+                                 median_count = median(count, na.rm=T),
+                                 Q1 = quantile(count, 0.25, na.rm=T),
+                                 Q3 = quantile(count, 0.75, na.rm=T)
+                               ),
+                               by = list(gene, condition)
+  ]
+})
+time_dt_8_1 <- extract_time(time_dt_8_1_result)
+cat("data.table T8.1 Time:", time_dt_8_1, "seconds.\n")
+
+# Update performance table Task 8.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T8.1 Calculate Robust Stats", 
+         `Time_DataFrame (s)` = time_df_8_1, 
+         `Time_DataTable (s)` = time_dt_8_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_stats_t8, 5))
+```
+
+## Task 8.2: Filter by Mean Difference (Treated > Control)
+This sub-task benchmarks the "pivot" operation. It takes the "long" statistics table from T8.1 and pivots it "wide" to get mean_count_treated and mean_count_control on the same row, then filters for genes where the treated mean is higher.
+
+```{r}
+cat("\nRunning Task 8.2: Filter by Treated > Control Mean...\n")
+
+# --- 8.2.1: Data.frame / Dplyr ---
+time_df_8_2_result <- system.time({
+  df_risultato_8_2 <- df_stats_t8 %>%
+    pivot_wider(names_from = condition, 
+                values_from = c(mean_count, median_count, Q1, Q3)) %>% 
+    filter(mean_count_treated > mean_count_control)
+})
+time_df_8_2 <- extract_time(time_df_8_2_result)
+cat("DataFrame T8.2 Time:", time_df_8_2, "seconds.\n")
+
+# --- 8.2.2: Data.table ---
+time_dt_8_2_result <- system.time({
+  dt_wide <- dcast(dt_stats_t8, 
+                   gene ~ condition, 
+                   value.var = c("mean_count", "median_count", "Q1", "Q3"))
+  dt_risultato_8_2 <- dt_wide[mean_count_treated > mean_count_control]
+})
+time_dt_8_2 <- extract_time(time_dt_8_2_result)
+cat("data.table T8.2 Time:", time_dt_8_2, "seconds.\n")
+
+# Update performance table Task 8.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T8.2 Filter (Treated > Control)", 
+         `Time_DataFrame (s)` = time_df_8_2, 
+         `Time_DataTable (s)` = time_dt_8_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_8_2, 5))
+
+```
+
+```{r}
+# SAVE TASK 8 RESULTS
+fwrite(dt_risultato_8_2, file.path(output_dir, "Task8_TreatedVsControl_Results.csv"))
+cat("\nTask 8 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Task 9: Data Transformation (Wide -> Long -> Wide)
+**Goal: This task benchmarks the full 'wide-to-long-to-wide' data transformation pipeline. We start with a "wide" matrix (bulk_counts_wide.csv), melt it to a "long" format (Step 1), add per-sample total counts (Step 2), and then join, aggregate, and pivot it back to a "wide" summary matrix (gene x condition means) (Step 3).**
+
+</div>
+
+## Data Preparation
+We load clean copies of the wide count matrix and the metadata. We pre-key the metadata table for faster data.table joins and define the indices of the sample columns.
+
+```{r}
+cat("\n--- START TASK 9: WIDE -> LONG -> WIDE TRANSFORMATION ---\n")
+
+# Dati per Task 9
+dt_counts_wide_t9_local <- copy(dt_counts_wide_t9)
+dt_metadata_t9_local <- copy(dt_metadata)
+df_counts_wide_t9_local <- copy(df_counts_wide_t9)
+df_metadata_t9_local <- copy(df_metadata)
+
+setkey(dt_metadata_t9_local, sample_id) 
+SAMPLE_COLS_INDICES <- 2:ncol(df_counts_wide_t9_local) 
+```
+
+## Task 9.1: Full Transformation Pipeline
+This single benchmark runs the entire 3-step process (Wide-to-Long, Add Totals, Aggregate-to-Wide) for both dplyr and data.table to compare their total pipeline speed.
+```{r}
+cat("\n--- Running Task 9.1: Transformation Pipeline...\n")
+
+# --- 9.1.1: Data.frame / Tidyverse ---
+time_df_9_1_result <- system.time({
+  # 1. Wide -> Long
+  df_long <- df_counts_wide_t9_local %>% 
+    pivot_longer(cols = all_of(SAMPLE_COLS_INDICES),
+                 names_to = "sample_id", 
+                 values_to = "count")
+    # 2. Add per-sample totals
+  df_with_totals <- df_long %>%
+    group_by(sample_id) %>%
+    mutate(sample_total = sum(count, na.rm = TRUE)) %>%
+    ungroup()
+    # 3. Aggregate by (gene, condition) and pivot Long -> Wide
+  df_final_wide <- df_with_totals %>%
+    left_join(df_metadata_t9_local, by = "sample_id") %>% 
+    group_by(gene, condition) %>% 
+    summarise(mean_count = mean(count, na.rm = TRUE), .groups = 'drop') %>% 
+    pivot_wider(names_from = condition, values_from = mean_count)
+ 
+  df_risultato_9_1 <- df_final_wide
+})
+
+time_df_9_1 <- extract_time(time_df_9_1_result)
+cat("DataFrame T9.1 Time (Tidyverse):", time_df_9_1, "seconds.\n")
+```
+
+```{r}
+# --- 9.1.2: Data.table (melt + dcast) ---
+time_dt_9_1_result <- system.time({
+  # 1. Wide -> Long (melt)
+  dt_long <- melt(dt_counts_wide_t9_local, 
+                  id.vars = "gene", 
+                  measure.vars = SAMPLE_COLS_INDICES, 
+                  variable.name = "sample_id", 
+                  value.name = "count")
+  # 2. Add per-sample totals
+  dt_sample_totals <- dt_long[, .(sample_total = sum(count, na.rm = TRUE)), by = sample_id]
+  dt_long_with_totals <- dt_sample_totals[dt_long, on = "sample_id"]
+  # 3. Aggregate by (gene, condition) and pivot Long -> Wide
+  dt_joined <- dt_metadata_t9_local[dt_long_with_totals, on = "sample_id"]
+  dt_risultato_9_1 <- dcast(dt_joined, gene ~ condition, value.var = "count", fun.aggregate = mean) 
+})
+time_dt_9_1 <- extract_time(time_dt_9_1_result)
+cat("data.table T9.1 Time (melt/dcast):", time_dt_9_1, "seconds.\n")
+
+# Control prints 
+cat("--- PASSO 1 (Wide -> Long) RISULTATO: ---\n")
+print(head(dt_long, 3))
+cat("\n--- PASSO 2 (Add Totals) RISULTATO: ---\n")
+print(head(dt_long_with_totals, 3))
+cat("\n--- PASSO 3 (Finale Wide) RISULTATO: ---\n")
+print(head(dt_risultato_9_1, 3))
+
+# Update performance table Task 9
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T9.1 Wide->Long->Wide", 
+         `Time_DataFrame (s)` = time_df_9_1, 
+         `Time_DataTable (s)` = time_dt_9_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+```
+
+```{r}
+#SAVE TASK 9 RESULTS
+fwrite(dt_risultato_9_1, file.path(output_dir, "Task9_GeneXCondition_Results.csv"))
+cat("\nAnalisi Task 9 completata.\n")
+```
+
+<div class="rmd-task">
+
+# Task 10: ATAC-to-Gene Mapping (Spatial Join)
+**Goal: This advanced bioinformatics task maps genomic "peaks" (active regions) to gene bodies using a spatial join. It first counts the number of peaks overlapping each gene (T10.1), then calculates the total base-pair (bp) length of these overlaps and returns the Top 20 most overlapped genes (T10.2).**
+</div>
+
+## Helper function (Task 10 and 11)
+This helper function calculates the exact base-pair (bp) overlap between two genomic intervals (e.g., a peak and a gene).
+```{r}
+#The overlap is the (minimum of the ends) - (maximum of the starts)
+#pmax(0, ...) ensures that non-overlapping intervals return 0 instead of a negative number.
+calc_overlap_length <- function(start1, end1, start2, end2) {
+  pmax(0, pmin(end1, end2) - pmax(start1, start2))
+}
+```
+
+## Data Preparation
+We load clean copies of the ATAC peaks and Gene Annotation files and we clean column names.
+```{r}
+cat("\n--- START TASK 10: ATAC-TO-GENE MAPPING ---\n")
+# Create local copies for Task 10
+dt_peaks_t10_local <- copy(dt_peaks_t7) 
+dt_genes_t10_local <- copy(dt_genes_t10) 
+df_genes_t10_local <- as.data.frame(dt_genes_t10_local)
+df_peaks_t10_local <- as.data.frame(dt_peaks_t10_local)
+
+# Clean column names
+setnames(dt_peaks_t10_local, c("V1", "V2", "V3", "V4", "V5"), c("chr", "start", "end", "peaks_id", "score"), skip_absent = TRUE)
+setnames(dt_genes_t10_local, c("V1", "V2", "V3", "V4"), c("chr", "start", "end", "gene"), skip_absent = TRUE)
+```
+
+## Task 10.1: Spatial Join and Peak Count
+This sub-task performs the genomic interval intersection. We count how many ATAC peaks overlap with each gene body. 
+```{r}
+cat("\nRunning Task 10.1: Spatial Join & Peak Count...\n")
+
+# --- 10.1.1: Data.frame / Dplyr ---
+time_df_10_1_result <- system.time({
+  df_overlapped <- df_peaks_t10_local %>%
+    left_join(df_genes_t10_local, by = "chr", relationship = "many-to-many") %>%
+    filter(start.x <= end.y & end.x >= start.y) 
+ 
+  df_count <- df_overlapped %>%
+    group_by(gene) %>% 
+    summarise(peak_count = n(), .groups = 'drop')
+ 
+  df_risultato_10_1 <- df_count
+})
+time_df_10_1 <- extract_time(time_df_10_1_result)
+cat("DataFrame T10.1 Time:", time_df_10_1, "seconds.\n")
+
+# --- 10.1.2: Data.table ---
+time_dt_10_1_result <- system.time({
+  setkey(dt_peaks_t10_local, chr, start, end)
+  setkey(dt_genes_t10_local, chr, start, end)
+  
+  dt_overlapped <- foverlaps(dt_peaks_t10_local, dt_genes_t10_local, nomatch = 0)
+  
+  dt_count <- dt_overlapped[, .(peak_count = .N), by = .(gene)]
+  dt_risultato_10_1 <- dt_count
+})
+time_dt_10_1 <- extract_time(time_dt_10_1_result)
+cat("data.table T10.1 Time:", time_dt_10_1, "seconds.\n")
+
+# --- 10.1.3: SQL (sqldf) ---
+time_sql_10_1_result <- system.time({
+  sql_risultato_10_1 <- sqldf::sqldf("
+    SELECT T2.gene, COUNT(T1.chr) AS peak_count
+    FROM df_peaks_t10_local AS T1
+    INNER JOIN df_genes_t10_local AS T2
+    ON T1.chr = T2.chr
+    WHERE T1.start <= T2.end AND T1.end >= T2.start
+    GROUP BY T2.gene
+  ")
+})
+time_sql_10_1 <- extract_time(time_sql_10_1_result)
+cat("SQL T10.1 Time:", time_sql_10_1, "seconds.\n")
+
+# Update performance table Task 10.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T10.1 Spatial Join & Peak Count", 
+         `Time_DataFrame (s)` = time_df_10_1, 
+         `Time_DataTable (s)` = time_dt_10_1, 
+         `Time_SQL (s)` = time_sql_10_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_10_1, 5))
+```
+
+## Task 10.2: Calculate Overlap Length and Find Top 20 Genes
+This sub-task re-performs the spatial join to retain the overlap coordinates, calculates the total base-pair overlap length for each gene, and returns the 20 genes with the highest total overlap.
+```{r}
+cat("\nRunning Task 10.2: Overlap Length and Top 20 Geni...\n")
+
+# --- 10.2.1: Data.frame / Dplyr ---
+time_df_10_2_result <- system.time({
+  df_overlapped_base <- df_peaks_t10_local %>%
+    left_join(df_genes_t10_local, by = "chr", relationship = "many-to-many") %>%
+    filter(start.x <= end.y & end.x >= start.y)
+ 
+  df_overlap_sum <- df_overlapped_base %>%
+    mutate(
+      overlap_len = calc_overlap_length(start.x, end.x, start.y, end.y)
+    ) %>%
+    group_by(gene) %>% 
+    summarise(total_overlap_bp = sum(overlap_len), .groups = 'drop') %>%
+    arrange(desc(total_overlap_bp)) %>%
+    slice_head(n = 20)
+ 
+  df_risultato_10_2 <- df_overlap_sum
+})
+time_df_10_2 <- extract_time(time_df_10_2_result)
+cat("DataFrame T10.2 Time:", time_df_10_2, "seconds.\n")
+
+# --- 10.2.2: Data.table ---
+time_dt_10_2_result <- system.time({
+  setkey(dt_peaks_t10_local, chr, start, end)
+  setnames(dt_genes_t10_local, old = c("start", "end"), new = c("gene_start", "gene_end"), skip_absent = TRUE)
+  setkey(dt_genes_t10_local, chr, gene_start, gene_end)
+  # Perform the optimized spatial join
+  dt_overlapped_final <- foverlaps(
+    dt_peaks_t10_local,
+    dt_genes_t10_local,
+    by.x = c("chr", "start", "end"),
+    by.y = c("chr", "gene_start", "gene_end"),
+    nomatch = 0
+  )
+  # Calculate the overlap length. i.start/i.end are the coordinates from dt_peaks_t10_local (i)
+  dt_overlapped_final[, overlap_len := calc_overlap_length(start, end, gene_start, gene_end)]
+  # Aggregate by gene, order, and select Top 20
+  dt_overlap_sum <- dt_overlapped_final[
+    , .(total_overlap_bp = sum(overlap_len)),
+    by = gene
+  ][order(-total_overlap_bp)][1:20]
+
+  dt_risultato_10_2 <- dt_overlap_sum
+}) 
+time_dt_10_2 <- extract_time(time_dt_10_2_result)
+cat("data.table T10.2 Time (Optimized):", time_dt_10_2, "seconds.\n")
+
+# Update performance table 10.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T10.2 Overlap Length & Top 20", 
+         `Time_DataFrame (s)` = time_df_10_2, 
+         `Time_DataTable (s)` = time_dt_10_2, 
+         `Time_SQL (s)` = NA_real_)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_10_2, 5))
+```
+
+```{r}
+#SAVE TASK 10 RESULTS
+fwrite(dt_risultato_10_2, file.path(output_dir, "Task10_Top20Overlap_Results.csv"))
+cat("\nTask 10 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Task 11: Map SNPs to Genes (Spatial Join)
+**Goal: This task identifies variants overlapping gene regions. We first convert SNP positions to 1-bp intervals and perform a genomic non-equi join. We then summarize HIGH impact variant counts by gene and by sample, and list the genes most frequently hit by HIGH-impact variants across all samples.**
+</div>
+
+## Data Preparation
+We load clean copies of the Variants and Gene Annotation files. We transform the SNP positions into 1-bp intervals and ensure the data tables are ready for the non-equi join.
+```{r}
+cat("\n--- START TASK 11: SNP-TO-GENE SPATIAL JOIN ---\n")
+# Create local copies for Task 11
+dt_variants_t11 <- copy(dt_variants_t11)
+dt_genes_t11 <- copy(dt_genes_t10) 
+
+# Convert variant positions to 1-bp intervals
+dt_variants_t11[, variant_start := pos] 
+dt_variants_t11[, variant_end := pos]    
+
+df_variants_t11<- as.data.frame(dt_variants_t11)
+df_variants_t11<- df_variants_t11 %>%
+  mutate(variant_start = pos, variant_end = pos)
+
+df_genes_t11 <- as.data.frame(dt_genes_t11)
+```
+
+## Task 11.1/11.2: Spatial Join, Filter 'HIGH' and Summarize (Gene x Sample)
+This sub-task performs the spatial join to map HIGH impact SNPs to genes, followed by grouping and summarizing the total count of HIGH impact variants by gene and by sample.
+```{r}
+cat("\nRunning Task 11.1/11.2: Spatial Join, Filter HIGH, and Summarize...\n")
+
+# --- 11.1.1: Data.frame / Dplyr ---
+time_df_11_1_result <- system.time({
+  df_overlapped_snps <- df_variants_t11 %>%
+    filter(impact == 'HIGH') %>%
+    # Join on Chromosome, which creates the massive intermediate table
+    left_join(df_genes_t11, by = "chr", relationship = "many-to-many") %>%
+    # Filter for the interval overlap (SNP pos must be within [start, end])
+    filter(variant_start <= end & variant_end >= start)
+  
+  df_summary_11_2 <- df_overlapped_snps %>%
+    group_by(gene, sample_id) %>%
+    summarise(high_impact_count = n(), .groups = 'drop')
+  
+  df_risultato_11_2 <- df_summary_11_2
+})
+time_df_11_1 <- extract_time(time_df_11_1_result)
+cat("DataFrame T11.1/2 Time:", time_df_11_1, "seconds.\n")
+
+# --- 11.1.2: Data.table (Optimized Non-Equi Join) ---
+time_dt_11_1_result <- system.time({
+  dt_variants_high <- dt_variants_t11[impact == 'HIGH']
+  # Set keys on both tables for the non-equi join
+  setkey(dt_variants_high, chr, variant_start, variant_end)
+  setkey(dt_genes_t11, chr, start, end)
+  
+  # Perform the optimized join
+  dt_overlapped_snps <- dt_genes_t11[dt_variants_high,
+                        on = .(chr, start <= variant_end, end >= variant_start),
+                        nomatch = 0]
+  
+  # Summarize count by gene and sample
+  dt_risultato_11_2 <- dt_overlapped_snps[, .(high_impact_count = .N), by = .(gene, sample_id)]
+})
+time_dt_11_1 <- extract_time(time_dt_11_1_result)
+cat("data.table T11.1/2 Time:", time_dt_11_1, "seconds.\n")
+
+# --- 11.1.3: SQL (sqldf) ---
+time_sql_11_1_result <- system.time({
+  sql_risultato_11_2 <- sqldf::sqldf("
+    SELECT T2.gene, T1.sample_id, COUNT(T1.chr) AS high_impact_count
+    FROM df_variants_t11 AS T1
+    INNER JOIN df_genes_t11 AS T2
+    ON T1.chr = T2.chr
+    WHERE
+      T1.impact = 'HIGH' AND
+      T1.variant_start <= T2.end AND T1.variant_end >= T2.start
+    GROUP BY T2.gene, T1.sample_id
+  ")
+})
+time_sql_11_1 <- extract_time(time_sql_11_1_result)
+cat("SQL T11.1/2 Time:", time_sql_11_1, "seconds.\n")
+
+# Update performance table Task 11.1/2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    # Use a named list to align columns correctly
+    list(Task = "T11.1/2 Join, Filter & Summary",
+         `Time_DataFrame (s)` = time_df_11_1,
+         `Time_DataTable (s)` = time_dt_11_1,
+         `Time_SQL (s)` = time_sql_11_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_11_2, 5))
+```
+
+## Task 11.3: Top 10 Most Frequently Hit Genes
+This sub-task calculates how many distinct samples contribute to the HIGH-impact summary for each gene and returns the top 10 genes with the highest number of hit samples.
+```{r}
+cat("\nRunning Task 11.3: Find Genes with HIGH variants in ALL samples...\n")
+
+# Calculate the total number of unique samples present in the summary data
+total_samples_with_high_variants <- dt_risultato_11_2[, uniqueN(sample_id)]
+cat("Total number of samples:", total_samples_with_high_variants, "\n")
+
+# Base data
+df_risultato_11_2_base <- as.data.frame(dt_risultato_11_2)
+
+# --- 11.3.1: Data.frame / Dplyr ---
+time_df_11_3_result <- system.time({
+  df_genes_all_samples <- df_risultato_11_2 %>%
+    group_by(gene) %>%
+    summarise(n_samples_hit = n_distinct(sample_id), .groups = 'drop') %>%
+    filter(n_samples_hit == total_samples_with_high_variants)
+})
+time_df_11_3 <- extract_time(time_df_11_3_result)
+cat("DataFrame T11.3 Time:", time_df_11_3, "seconds.\n")
+
+# --- 11.3.2: Data.table ---
+time_dt_11_3_result <- system.time({
+  dt_genes_all_samples <- dt_risultato_11_2[,
+                                            .(n_samples_hit = uniqueN(sample_id)), 
+                                            by = gene
+  ][
+    n_samples_hit == total_samples_with_high_variants
+  ]
+})
+time_dt_11_3 <- extract_time(time_dt_11_3_result)
+cat("data.table T11.3 Time:", time_dt_11_3, "seconds.\n")
+
+
+# --- 11.3.3: SQL (sqldf) ---
+sql_risultato_11_2_sql <- dt_risultato_11_2 # Usa il risultato DT come input
+time_sql_11_3_result <- system.time({
+  sql_genes_all_samples <- sqldf::sqldf(
+    paste("SELECT gene, COUNT(DISTINCT sample_id) AS n_samples_hit
+           FROM sql_risultato_11_2_sql
+           GROUP BY gene
+           HAVING n_samples_hit =", total_samples_with_high_variants)
+  )
+})
+time_sql_11_3 <- extract_time(time_sql_11_3_result)
+cat("SQL T11.3 Time:", time_sql_11_3, "seconds.\n")
+
+# Update performance table Task 11.3
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T11.3 Top 10 Hit Genes", 
+         `Time_DataFrame (s)` = time_df_11_3, 
+         `Time_DataTable (s)` = time_dt_11_3, 
+         `Time_SQL (s)` = time_sql_11_3)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_genes_all_samples, 10)) 
+```
+
+```{r}
+# SAVE TASK 11 RESULTS
+fwrite(dt_risultato_11_2, file.path(output_dir, "Task11_HighImpactSummary_Results.csv"))
+fwrite(dt_genes_all_samples, file.path(output_dir, "Task11_GenesAcrossAllSamples_Results.csv"))
+cat("\nTask 11 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+# Task 12: Combine Cohorts Safely
+**Goal: This task benchmarks the safe combination of two cohorts using `rbindlist(use.names=TRUE, fill=TRUE)`. It then calculates the variability of all genes, joins the combined cohort data back to the bulk counts, and computes the per-cohort, per-condition, per-gene mean counts for the top 100 most variable genes.**
+</div>
+
+## Data Preparation
+We load clean copies of the cohort and count data for the benchmarks.
+```{r}
+cat("\n--- START TASK 12: COMBINE COHORTS ---\n")
+
+# Data for Task 12
+dt_cohortA_local <- copy(dt_cohortA)
+df_cohortA_local <- copy(df_cohortA)
+dt_cohortB_local <- copy(dt_cohortB)
+df_cohortB_local <- copy(df_cohortB)
+```
+
+# # Task 12.1: Combine Cohorts and Order
+This sub-task combines Cohorts A and B, ensuring safe alignment of columns using `use.names = TRUE` and `fill = TRUE`. The result is then ordered by cohort, condition, and sample_id.
+```{r}
+cat("\nRunning Task 12.1: Combine Cohorts (3-way comparison)...\n")
+
+# --- 12.1.1: Data.frame / Dplyr (bind_rows) ---
+time_df_12_1_result <- system.time({
+  df_combined <- bind_rows(df_cohortA_local, df_cohortB_local) %>% 
+    arrange(cohort, condition, sample_id) 
+  df_risultato_12_1_df <- df_combined
+})
+time_df_12_1 <- extract_time(time_df_12_1_result)
+cat("DataFrame T12.1 Time (bind_rows):", time_df_12_1, "seconds.\n")
+
+# --- 12.1.2: Data.table (rbindlist) ---
+time_dt_12_1_result <- system.time({
+  dt_combined <- rbindlist(list(dt_cohortA_local, dt_cohortB_local), use.names = TRUE, fill = TRUE)
+  setorder(dt_combined, cohort, condition, sample_id) 
+  dt_risultato_12_1_dt <- dt_combined
+})
+time_dt_12_1 <- extract_time(time_dt_12_1_result)
+cat("data.table T12.1 Time (rbindlist):", time_dt_12_1, "seconds.\n")
+
+# --- 12.1.3: SQL (sqldf) ---
+time_sql_12_1_result <- system.time({
+  sql_risultato_12_1_sql <- sqldf::sqldf("
+        SELECT * FROM df_cohortA_local
+        UNION ALL
+        SELECT * FROM df_cohortB_local
+        ORDER BY cohort, condition, sample_id
+    ")
+})
+time_sql_12_1 <- extract_time(time_sql_12_1_result)
+cat("SQL T12.1 Time (UNION ALL):", time_sql_12_1, "seconds.\n")
+
+# Update performance table Task 12.1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T12.1 Combine & Sort Cohorts", 
+         `Time_DataFrame (s)` = time_df_12_1, 
+         `Time_DataTable (s)` = time_dt_12_1, 
+         `Time_SQL (s)` = time_sql_12_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_12_1_dt, 5)) 
+```
+
+## Task 12.2: Join and Calculate Mean Counts (Top 100 Most Variable Genes)
+This sub-task first identifies the top 100 most variable genes across the entire dataset. It then filters the bulk counts, joins the data with the combined cohort metadata (from 12.1), and computes the mean count for these top genes, grouped by cohort, condition, and gene.
+```{r}
+cat("\nRunning Task 12.2: Join & Calculate Cohort Means (Top 100)...\n")
+
+# --- 12.2.1: Data.frame / Dplyr ---
+time_df_12_2_result <- system.time({
+  # 1. Find Top 100 most variable genes (using variance)
+  top100_genes_df <- df_counts %>%
+    group_by(gene) %>%
+    summarise(variance = var(count, na.rm = TRUE)) %>%
+    arrange(desc(variance)) %>%
+    slice_head(n = 100) %>%
+    pull(gene) 
+ 
+  # 2. Join and Calculate Means
+  df_risultato_12_2 <- df_counts %>%
+    filter(gene %in% top100_genes_df) %>% 
+    left_join(df_risultato_12_1_df, by = "sample_id") %>% 
+    filter(!is.na(cohort)) %>% 
+    group_by(cohort, condition, gene) %>%
+    summarise(mean_count = mean(count, na.rm = TRUE), .groups = 'drop')
+})
+time_df_12_2 <- extract_time(time_df_12_2_result)
+cat("DataFrame T12.2 Time:", time_df_12_2, "seconds.\n")
+
+# --- 12.2.2: Data.table ---
+time_dt_12_2_result <- system.time({
+  # 1. Find Top 100 most variable genes (using variance)
+  top100_genes_dt <- dt_counts[, .(variance = var(count, na.rm = TRUE)), by = gene][order(-variance)][1:100, gene]
+ 
+  # 2. Join and Calculate Means
+  dt_risultato_12_2 <- dt_counts[gene %in% top100_genes_dt][ 
+    dt_risultato_12_1_dt, on = "sample_id", nomatch = 0
+  ][,
+    .(mean_count = mean(count, na.rm = TRUE)), 
+    by = .(cohort, condition, gene)
+  ]
+})
+time_dt_12_2 <- extract_time(time_dt_12_2_result)
+cat("data.table T12.2 Time:", time_dt_12_2, "seconds.\n")
+
+# Update performance table Task 12.2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "T12.2 Join & Cohort Means (Top 100)", 
+         `Time_DataFrame (s)` = time_df_12_2, 
+         `Time_DataTable (s)` = time_dt_12_2,
+         `Time_SQL (s)` = NA_real_)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_risultato_12_2, 5))
+```
+
+```{r}
+# SAVE TASK 12 RESULTS
+fwrite(dt_risultato_12_2, file.path(output_dir, "Task12_CohortMeans_Results.csv"))
+cat("\nTask 12 Analysis completed.\n")
+```
+
+<div class="rmd-task">
+
+# Final Revision: Single-Cell Analysis (Cell Type Annotation)
+**Goal: This task associates cell types with integration clusters, keeping track of their origin (Normal vs. Tumor tissue). The final outputs include a combined master file, cell counts per cluster, a summary table showing cell type association to tissue type, and normalized percentages for cell types within each cluster/tissue combination.**
+</div>
+
+## Data Preparation
+We load the single-cell clustering and cell type annotation tables. A critical cleaning step is performed on the `cell` identifier column to ensure consistent keys for the inner join, removing common single-cell metadata prefixes like `_[A-Z]_`.
+```{r}
+cat("\n--- START FINAL REVISION: SINGLE-CELL ANALYSIS ---\n")
+
+# Data for Final Task
+dt_clusters <- copy(dt_clusters_fr)
+dt_celltypes <- copy(dt_celltypes_fr)
+df_clusters <- copy(df_clusters_fr)
+df_celltypes <- copy(df_celltypes_fr)
+
+# cleaning the join key "cell"
+cat("Pulizia nomi cellule...\n")
+dt_clusters[, cell := trimws(as.character(cell))]
+dt_celltypes[, cell := trimws(as.character(cell))]
+dt_clusters[, cell := gsub("_[A-Z]_", "", cell)]
+
+df_clusters$cell <- trimws(as.character(df_clusters$cell))
+df_celltypes$cell <- trimws(as.character(df_celltypes$cell))
+df_clusters$cell <- gsub("_[A-Z]_", "", df_clusters$cell)
+
+# Check common keys after cleaning
+common_cells <- length(intersect(dt_clusters$cell, dt_celltypes$cell))
+cat("DEBUG: Trovate", common_cells, "cellule comuni.\n")
+```
+
+## FR-TASK 1: Combine Cell Types and Clusters
+This task creates the master table by joining the integration cluster data with the cell type and sample type annotations on the `cell` ID.
+```{r}
+cat("\nRunning FR-Task 1: Combine Cell Types and Clusters...\n")
+
+# --- 1.1: Data.frame / Dplyr (inner_join) ---
+time_df_fr_1_result <- system.time({
+  df_master_table <- df_clusters %>%
+    inner_join(df_celltypes, by = "cell")
+})
+time_df_fr_1 <- extract_time(time_df_fr_1_result)
+cat("DataFrame FR-T1 Time (inner_join):", time_df_fr_1, "seconds.\n")
+
+# --- 1.2: Data.table (Join) ---
+time_dt_fr_1_result <- system.time({
+  setkey(dt_clusters, cell)
+  setkey(dt_celltypes, cell)
+  dt_master_table <- dt_clusters[dt_celltypes, nomatch = 0]
+})
+time_dt_fr_1 <- extract_time(time_dt_fr_1_result)
+cat("data.table FR-T1 Time (Keyed Join):", time_dt_fr_1, "seconds.\n")
+
+# --- 1.3: SQL (sqldf) ---
+time_sql_fr_1_result <- system.time({
+  sql_master_table <- sqldf::sqldf("
+    SELECT T1.*, T2.cell_type, T2.sample_type
+    FROM df_clusters AS T1
+    INNER JOIN df_celltypes AS T2 ON T1.cell = T2.cell
+  ")
+})
+time_sql_fr_1 <- extract_time(time_sql_fr_1_result)
+cat("SQL FR-T1 Time (INNER JOIN):", time_sql_fr_1, "seconds.\n")
+
+# Update performance table FR-Task 1
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "FR-T1 Combine Tables", 
+         `Time_DataFrame (s)` = time_df_fr_1, 
+         `Time_DataTable (s)` = time_dt_fr_1, 
+         `Time_SQL (s)` = time_sql_fr_1)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_master_table, 5))
+```
+
+## FR-TASK 2: Count Cell Types per Cluster (Total)
+This task computes the total count of each cell type within each integration cluster.
+```{r}
+cat("\nRunning FR-Task 2: Count Cell Types per Cluster (Total)...\n")
+
+# --- 2.1: Data.frame / Dplyr (count) ---
+time_df_fr_2_result <- system.time({
+  df_counts_per_cluster <- df_master_table %>%
+    count(integration_cluster, cell_type, name = "count")
+})
+time_df_fr_2 <- extract_time(time_df_fr_2_result)
+cat("DataFrame FR-T2 Time (count):", time_df_fr_2, "seconds.\n")
+
+# --- 2.2: Data.table (.N by) ---
+time_dt_fr_2_result <- system.time({
+  dt_counts_per_cluster <- dt_master_table[, .N, by = .(integration_cluster, cell_type)]
+  setnames(dt_counts_per_cluster, "N", "count") 
+})
+time_dt_fr_2 <- extract_time(time_dt_fr_2_result)
+cat("data.table FR-T2 Time (.N by):", time_dt_fr_2, "seconds.\n")
+
+# --- 2.3: SQL (sqldf) ---
+time_sql_fr_2_result <- system.time({
+  sql_counts_per_cluster <- sqldf::sqldf("
+    SELECT integration_cluster, cell_type, COUNT(*) AS count
+    FROM sql_master_table
+    GROUP BY integration_cluster, cell_type
+  ")
+})
+time_sql_fr_2 <- extract_time(time_sql_fr_2_result)
+cat("SQL FR-T2 Time (GROUP BY):", time_sql_fr_2, "seconds.\n")
+
+# Update performance table FR-Task 2
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "FR-T2 Count per Cluster", 
+         `Time_DataFrame (s)` = time_df_fr_2, 
+         `Time_DataTable (s)` = time_dt_fr_2, 
+         `Time_SQL (s)` = time_sql_fr_2)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_counts_per_cluster, 5))
+```
+
+## FR-TASK 3 & 5: Count and Normalize % by Cluster and Tissue
+This task computes the cell counts by cluster, cell type, AND tissue type (N/T). It then normalizes these counts to provide the percentage contribution of each cell type within its cluster/tissue group.
+```{r}
+cat("\nRunning FR-Task 3 & 5: Count & Normalize % by Cluster and Tissue...\n")
+
+# --- 3&5.1: Data.frame / Dplyr ---
+time_df_fr_3_5_result <- system.time({
+  df_counts_tissue <- df_master_table %>%
+    count(integration_cluster, cell_type, sample_type, name = "count")
+ 
+  df_normalized_tissue <- df_counts_tissue %>%
+    group_by(integration_cluster, sample_type) %>%
+    mutate(
+      total_in_group = sum(count),
+      percentage = (count / total_in_group) * 100
+    ) %>%
+    ungroup()
+})
+time_df_fr_3_5 <- extract_time(time_df_fr_3_5_result)
+cat("DataFrame FR-T3/5 Time (count + mutate):", time_df_fr_3_5, "seconds.\n")
+
+# --- 3&5.2: Data.table ---
+time_dt_fr_3_5_result <- system.time({
+  dt_counts_tissue <- dt_master_table[, .N, by = .(integration_cluster, cell_type, sample_type)]
+  setnames(dt_counts_tissue, "N", "count") 
+ 
+  dt_counts_tissue[, total_in_group := sum(count), by = .(integration_cluster, sample_type)]
+  dt_counts_tissue[, percentage := (count / total_in_group) * 100]
+ 
+  dt_normalized_tissue <- dt_counts_tissue
+})
+time_dt_fr_3_5 <- extract_time(time_dt_fr_3_5_result)
+cat("data.table FR-T3/5 Time (.N by + :=):", time_dt_fr_3_5, "seconds.\n")
+
+# --- 3&5.3: SQL (sqldf) ---
+time_sql_fr_3_5_result <- system.time({
+  sql_normalized_tissue <- sqldf::sqldf("
+    WITH Counts AS (
+      SELECT 
+        integration_cluster, 
+        cell_type, 
+        sample_type, 
+        COUNT(*) AS count
+      FROM sql_master_table
+      GROUP BY integration_cluster, cell_type, sample_type
+    )
+    SELECT 
+      *,
+      (CAST(count AS REAL) / SUM(count) OVER (PARTITION BY integration_cluster, sample_type)) * 100 AS percentage
+    FROM Counts
+  ")
+})
+time_sql_fr_3_5 <- extract_time(time_sql_fr_3_5_result)
+cat("SQL FR-T3/5 Time (Window Function):", time_sql_fr_3_5, "seconds.\n")
+
+# Update performance table FR-Task 3/5
+performance_comparison <- rbindlist(
+  list(
+    performance_comparison,
+    list(Task = "FR-T3/5 Count & Normalize", 
+         `Time_DataFrame (s)` = time_df_fr_3_5, 
+         `Time_DataTable (s)` = time_dt_fr_3_5, 
+         `Time_SQL (s)` = time_sql_fr_3_5)
+  ),
+  use.names = TRUE, fill = TRUE
+)
+print(head(dt_normalized_tissue, 5))
+```
+
+```{r}
+# SAVING FINAL REVISION RESULTS
+fwrite(dt_master_table, file.path(output_dir, "FinalTask_MasterTable.csv"))
+fwrite(dt_counts_per_cluster, file.path(output_dir, "FinalTask_CountsPerCluster.csv"))
+fwrite(dt_normalized_tissue, file.path(output_dir, "FinalTask_NormalizedCounts_Tissue.csv"))
+cat("\nAnalisi Final Revision completata.\n")
+```
+
+## FR-TASK 6: Generate Plot Describing Cell Type Distribution
+This final required task generates a faceted stacked bar chart visualizing the normalized cell type percentage within each cluster, separated by Normal ('N') and Tumor ('T') tissue type. 
+```{r plot_cell_distribution, fig.width=10, fig.height=7, dpi=300, dev='png'}
+# Rename the final calculated table for clarity
+dt_plot_data <- dt_normalized_tissue 
+
+# --- 1. Generate the Plot (Assign to variable) ---
+plot_final_revision <- ggplot(dt_plot_data, 
+       aes(x = integration_cluster, 
+           y = percentage, 
+           fill = cell_type)) +
+  
+  # Stacked bar chart
+  geom_bar(stat = "identity", position = "stack") +
+  
+  # Facet by Tissue Type (N/T)
+  facet_wrap(~ sample_type) +
+  
+  # Labels and themes
+  labs(title = "Cell Type Distribution within Integration Clusters, by Tissue Type",
+       y = "Normalized Percentage (%)",
+       x = "Integration Cluster",
+       fill = "Cell Type") +
+       
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold", size = 14)) +
+  
+  # Ensure Y-axis is formatted correctly
+  scale_y_continuous(labels = scales::percent_format(scale = 1))
+
+# --- 2. Save the Plot (PNG file) ---
+# Saves the graph in high resolution (300dpi) to the working directory
+ggsave(filename = file.path(output_dir, "FinalTask_CellTypeDistribution.png"), 
+       plot = plot_final_revision, 
+       width = 10, 
+       height = 6, 
+       units = "in", 
+       dpi = 300)
+
+# --- 3. Print the Plot (for embedding in the HTML/PDF report) ---
+print(plot_final_revision)
+```
+
+# Final Performance Results
+Finally, we print the complete cumulative performance table. All tasks have been executed, and the timings are correctly aligned in their respective columns, providing a direct comparison of `data.table`, `data.frame`, and `SQL` efficiency across all project tasks.
+```{r}
+cat("--- FINAL CUMULATIVE PERFORMANCE TABLE ---\n")
+
+# Print the final table in the report
+print(performance_comparison)
+
+cat("\n*** TOTAL ANALYSIS COMPLETED ***\n")
+```
+
+# Discussion and Conclusion
+
+## Performance Summary
+The cumulative performance comparison table clearly demonstrates the efficiency gains achieved by the `data.table` package over conventional `data.frame` and `dplyr` operations, and often over `sqldf` for complex grouped calculations.
+
+##  Alternative Packages and Methods
+The project specified comparing `data.table` with conventional `data.frame` R structure and suggested other packages. We incorporated `dplyr` (representing the tidyverse ecosystem) and `sqldf` (representing SQL database operations) in this comparison.
+
+In conclusion, while `dplyr` provides excellent readability and integration into the Tidyverse, and `sqldf` offers familiarity for database users, **`data.table` remains the most performant and memory-efficient choice for complex, single-machine data manipulation tasks in R**, particularly those involving grouped operations and specialized joins.
