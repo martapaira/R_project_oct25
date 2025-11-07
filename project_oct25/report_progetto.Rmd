@@ -1494,8 +1494,9 @@ performance_comparison <- rbindlist(
 print(head(dt_risultato_11_2, 5))
 ```
 
-## Task 11.3: Top 10 Most Frequently Hit Genes
-This sub-task calculates how many distinct samples contribute to the HIGH-impact summary for each gene and returns the top 10 genes with the highest number of hit samples.
+## Task 11.3: Genes with HIGH variants in ALL samples.
+List Genes with HIGH variants in ALL samples.
+
 ```{r}
 cat("\nRunning Task 11.3: Find Genes with HIGH variants in ALL samples...\n")
 
