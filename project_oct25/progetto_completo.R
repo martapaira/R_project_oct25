@@ -1495,7 +1495,7 @@ cat("data.table T11.3 Time:", time_dt_11_3, "seconds.\n")
 
 
 # --- 11.3.3: SQL (sqldf) ---
-sql_risultato_11_2_sql <- dt_risultato_11_2 # Usa il risultato DT come input
+sql_risultato_11_2_sql <- dt_risultato_11_2 
 time_sql_11_3_result <- system.time({
   sql_genes_all_samples <- sqldf::sqldf(
     paste("SELECT gene, COUNT(DISTINCT sample_id) AS n_samples_hit
@@ -1535,7 +1535,7 @@ cat("\nTask 11 analysis completed. Cumulative performance files saved.\n")
 # TASK 12: Combine Cohorts Safely
 # Goal: rbindlist() and calculate means per cohort.
 # ----------------------------------------------------
-cat("\n--- ISTART TASK 12: COMBINE COHORTS ---\n")
+cat("\n--- START TASK 12: COMBINE COHORTS ---\n")
 
 # Initialize a local performance table for Task 12
 performance_comparison_task12 <- data.table(Task = character(),
